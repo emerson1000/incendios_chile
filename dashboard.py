@@ -127,12 +127,55 @@ def load_conaf_data():
     return None
 
 # Inicializar datos
-if 'conaf_data' not in st.session_state:
-    with st.spinner("Cargando datos de CONAF..."):
-        st.session_state.conaf_data = load_conaf_data()
+try:
+    if 'conaf_data' not in st.session_state:
+        with st.spinner("Cargando datos de CONAF..."):
+            st.session_state.conaf_data = load_conaf_data()
 
-if st.session_state.conaf_data is None:
-    st.error("❌ No se encontraron datos reales de CONAF. Por favor ejecuta primero: python procesar_conaf_correctamente.py")
+    if st.session_state.conaf_data is None:
+        st.error("❌ No se encontraron datos reales de CONAF")
+        st.warning("""
+        **El dataset procesado no está disponible.**
+        
+        Por favor verifica que el archivo `data/processed/conaf_datos_reales_completo.csv` 
+        esté en el repositorio de GitHub.
+        """)
+        
+        # No usar st.stop() - mejor mostrar información útil
+        st.info("""
+        **Para solucionar:**
+        1. Verifica que el archivo existe en GitHub: `data/processed/conaf_datos_reales_completo.csv`
+        2. Si no existe, agrégalo al repositorio:
+           ```bash
+           git add data/processed/conaf_datos_reales_completo.csv
+           git commit -m "Add dataset"
+           git push
+           ```
+        3. Espera 1-2 minutos para que Streamlit Cloud se actualice
+        """)
+        
+        # Mostrar información de debug
+        with st.expander("🔍 Información de Debug"):
+            data_path = Path("data/processed/conaf_datos_reales_completo.csv")
+            st.write(f"**Ruta esperada:** {data_path.absolute()}")
+            st.write(f"**Existe:** {data_path.exists()}")
+            if data_path.exists():
+                st.write(f"**Tamaño:** {data_path.stat().st_size:,} bytes")
+            
+            # Listar archivos en data/processed
+            processed_dir = Path("data/processed")
+            if processed_dir.exists():
+                st.write("**Archivos en data/processed:**")
+                for f in processed_dir.iterdir():
+                    st.write(f"  - {f.name} ({f.stat().st_size:,} bytes)")
+        
+        # No detener la ejecución completamente - permitir que el usuario vea el error
+        st.stop()
+except Exception as e:
+    st.error(f"❌ Error al inicializar datos: {e}")
+    import traceback
+    with st.expander("🔍 Detalles del error"):
+        st.code(traceback.format_exc())
     st.stop()
 
 # Obtener datos base
