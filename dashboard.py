@@ -335,7 +335,7 @@ with tab1:
                         color='num_incendios',
                         color_continuous_scale='Reds'
                     )
-                    st.plotly_chart(fig1, use_container_width=True)
+                    st.plotly_chart(fig1, width='stretch')
                 except Exception as e:
                     st.error(f"Error al generar gráfico: {e}")
             
@@ -351,7 +351,7 @@ with tab1:
                         labels={'area_quemada_ha': 'Área (ha)', 'anio': 'Año'},
                         markers=True
                     )
-                    st.plotly_chart(fig2, use_container_width=True)
+                    st.plotly_chart(fig2, width='stretch')
                 except Exception as e:
                     st.error(f"Error al generar gráfico: {e}")
             
@@ -366,7 +366,7 @@ with tab1:
                     .reset_index()
                 )
                 top_comunas.columns = ['Comuna', 'Total Incendios']
-                st.dataframe(top_comunas, use_container_width=True, height=400)
+                st.dataframe(top_comunas, width='stretch', height=400)
                 
                 # Gráfico de top comunas
                 fig_top = px.bar(
@@ -380,7 +380,7 @@ with tab1:
                     color_continuous_scale='Oranges'
                 )
                 fig_top.update_layout(yaxis={'categoryorder': 'total ascending'})
-                st.plotly_chart(fig_top, use_container_width=True)
+                    st.plotly_chart(fig_top, width='stretch')
             except Exception as e:
                 st.error(f"Error al generar top comunas: {e}")
             
@@ -389,7 +389,7 @@ with tab1:
                 try:
                     st.dataframe(
                         df_filtrado[['comuna', 'region', 'anio', 'num_incendios', 'area_quemada_ha', 'temporada']].sort_values('num_incendios', ascending=False),
-                        use_container_width=True,
+                        width='stretch',
                         height=400
                     )
                 except Exception as e:
@@ -554,7 +554,7 @@ with tab2:
                                 color_continuous_scale='Blues'
                             )
                             fig_importance.update_layout(yaxis={'categoryorder': 'total ascending'})
-                            st.plotly_chart(fig_importance, use_container_width=True)
+                            st.plotly_chart(fig_importance, width='stretch')
                     
                     except Exception as e:
                         st.error(f"Error al entrenar modelo: {str(e)}")
@@ -623,7 +623,7 @@ with tab2:
                     
                     st.dataframe(
                         risk_map_sorted[['comuna', 'riesgo_probabilidad', 'riesgo_categoria', 'incendios_historico', 'area_historica']].head(20),
-                        use_container_width=True
+                        width='stretch'
                     )
                     
                     fig_risk = px.bar(
@@ -637,7 +637,7 @@ with tab2:
                         color_continuous_scale='Reds'
                     )
                     fig_risk.update_layout(yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig_risk, use_container_width=True)
+                    st.plotly_chart(fig_risk, width='stretch')
                 except Exception as e:
                     st.error(f"Error al mostrar mapa de riesgo: {e}")
         else:
@@ -761,7 +761,7 @@ with tab3:
                             columns=['Base', 'Brigadas']
                         ).sort_values('Brigadas', ascending=False)
                         
-                        st.dataframe(brigadas_df, use_container_width=True)
+                        st.dataframe(brigadas_df, width='stretch')
                         
                         fig_brigadas = px.bar(
                             brigadas_df,
@@ -771,14 +771,14 @@ with tab3:
                             color='Brigadas',
                             color_continuous_scale='Greens'
                         )
-                        st.plotly_chart(fig_brigadas, use_container_width=True)
+                        st.plotly_chart(fig_brigadas, width='stretch')
                     except Exception as e:
                         st.error(f"Error al mostrar distribución: {e}")
                     
                     st.subheader("🗺️ Mapa de Asignación")
                     try:
                         allocation_map = optimizer.get_allocation_map()
-                        st.dataframe(allocation_map.head(30), use_container_width=True, height=400)
+                        st.dataframe(allocation_map.head(30), width='stretch', height=400)
                     except Exception as e:
                         st.error(f"Error al generar mapa: {e}")
                         
@@ -825,7 +825,7 @@ with tab4:
                     xaxis_title='Año',
                     yaxis_title='Número de Incendios'
                 )
-                st.plotly_chart(fig_tendencia, use_container_width=True)
+                st.plotly_chart(fig_tendencia, width='stretch')
             
             with col2:
                 if region_seleccionada == 'Todas las Regiones':
@@ -843,7 +843,7 @@ with tab4:
                         color_continuous_scale='Reds'
                     )
                     fig_region.update_layout(yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig_region, use_container_width=True)
+                    st.plotly_chart(fig_region, width='stretch')
                 else:
                     comunas_region = df_filtrado.groupby('comuna')['num_incendios'].sum().reset_index()
                     comunas_region = comunas_region.sort_values('num_incendios', ascending=False).head(10)
@@ -859,7 +859,7 @@ with tab4:
                         color_continuous_scale='Oranges'
                     )
                     fig_comuna.update_layout(yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig_comuna, use_container_width=True)
+                    st.plotly_chart(fig_comuna, width='stretch')
             
             st.subheader("📋 Estadísticas Descriptivas")
             try:
@@ -873,7 +873,7 @@ with tab4:
                 
                 st.dataframe(
                     stats_df.sort_values('Total Incendios', ascending=False).head(20),
-                    use_container_width=True,
+                    width='stretch',
                     height=400
                 )
             except Exception as e:
