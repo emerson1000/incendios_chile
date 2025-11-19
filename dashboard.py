@@ -329,22 +329,78 @@ with tab2:
         with col1:
             st.subheader("Configuración del Modelo")
             
+            # Explicación de tipos de modelo
+            with st.expander("ℹ️ ¿Qué tipo de modelo elegir?", expanded=False):
+                st.markdown("""
+                **XGBoost** (Recomendado):
+                - ✅ Mejor rendimiento general para datos tabulares
+                - ✅ Maneja bien relaciones no lineales
+                - ✅ Buen balance entre velocidad y precisión
+                - ✅ Ideal para: Predicción de riesgo de incendios
+                
+                **LightGBM**:
+                - ✅ Muy rápido en entrenamiento
+                - ✅ Eficiente con datasets grandes
+                - ✅ Buen rendimiento, similar a XGBoost
+                - ✅ Ideal para: Análisis rápidos o datasets muy grandes
+                
+                **Random Forest**:
+                - ✅ Más interpretable
+                - ✅ Menos propenso a overfitting
+                - ✅ Más lento que XGBoost/LightGBM
+                - ✅ Ideal para: Cuando necesitas entender mejor las decisiones del modelo
+                """)
+            
             model_type = st.selectbox(
                 "Tipo de Modelo",
                 ["xgboost", "lightgbm", "random_forest"],
                 index=0,
-                help="XGBoost suele dar mejores resultados para datos tabulares"
+                help="Selecciona el algoritmo de Machine Learning a usar"
             )
+            
+            # Explicación de tipos de tarea
+            with st.expander("ℹ️ ¿Qué tipo de tarea elegir?", expanded=False):
+                st.markdown("""
+                **Classification (Clasificación)** - Recomendado para la mayoría de casos:
+                - 🎯 **Objetivo**: Predecir si HABRÁ o NO HABRÁ incendio (Sí/No)
+                - 📊 **Output**: Probabilidad de riesgo (0% a 100%)
+                - ✅ **Ideal para**: 
+                    - Alertas tempranas ("¿Hay riesgo de incendio hoy?")
+                    - Asignación preventiva de recursos
+                    - Identificar zonas de alto riesgo
+                - 📈 **Métricas**: Accuracy, Precision, Recall, F1-Score, ROC-AUC
+                
+                **Regression (Regresión)**:
+                - 🎯 **Objetivo**: Predecir CUÁNTOS incendios habrá (número exacto)
+                - 📊 **Output**: Número estimado de incendios
+                - ✅ **Ideal para**:
+                    - Planificación de recursos (¿cuántas brigadas necesito?)
+                    - Estimación de daño esperado
+                    - Presupuestos y logística
+                - 📈 **Métricas**: RMSE, MAE, R²
+                
+                **💡 Recomendación**: Usa **Classification** para la mayoría de casos de uso operacional.
+                """)
             
             task_type = st.selectbox(
                 "Tipo de Tarea",
                 ["classification", "regression"],
                 index=0,
-                help="Classification predice si habrá incendio, Regression predice el número de incendios"
+                help="Classification: ¿Habrá incendio? | Regression: ¿Cuántos incendios?"
             )
         
         with col2:
             st.subheader("Entrenamiento")
+            
+            # Información sobre el entrenamiento
+            st.info(f"""
+            **Datos para entrenar:**
+            - {len(df_filtrado):,} registros
+            - {df_filtrado['comuna'].nunique()} comunas
+            - Período: {ano_inicio}-{ano_fin}
+            
+            El modelo aprenderá patrones históricos de estos datos.
+            """)
             
             if st.button("🚀 Entrenar Modelo", type="primary", use_container_width=True):
                 with st.spinner("Entrenando modelo con datos reales..."):
@@ -513,6 +569,28 @@ with tab3:
         
         st.subheader("Configuración de Optimización")
         
+        # Explicación sobre optimización
+        with st.expander("ℹ️ ¿Qué hace la optimización de recursos?", expanded=False):
+            st.markdown("""
+            **🎯 Objetivo de la Optimización:**
+            
+            Dado un número limitado de brigadas y bases de operaciones, el sistema
+            calcula la **mejor ubicación** para minimizar el daño esperado o el tiempo
+            de respuesta.
+            
+            **📊 Cómo funciona:**
+            1. Usa el mapa de riesgo generado previamente
+            2. Considera la distancia entre bases y zonas de riesgo
+            3. Optimiza matemáticamente la asignación
+            4. Genera recomendaciones de ubicación óptima
+            
+            **💡 Casos de uso:**
+            - Planificación estratégica antes de la temporada de incendios
+            - Reubicación de recursos durante emergencias
+            - Evaluación de nuevas ubicaciones de bases
+            - Optimización de presupuesto y recursos
+            """)
+        
         col1, col2, col3 = st.columns(3)
         
         with col1:
@@ -521,7 +599,8 @@ with tab3:
                 min_value=1,
                 max_value=500,
                 value=50,
-                step=5
+                step=5,
+                help="Número total de brigadas que puedes desplegar"
             )
         
         with col2:
@@ -530,14 +609,32 @@ with tab3:
                 min_value=1,
                 max_value=50,
                 value=10,
-                step=1
+                step=1,
+                help="Número máximo de bases de operaciones a activar"
             )
         
         with col3:
+            # Explicación de objetivos
+            with st.expander("ℹ️ ¿Qué objetivo elegir?"):
+                st.markdown("""
+                **Minimize Damage (Minimizar Daño)** - Recomendado:
+                - 🎯 Minimiza el área quemada esperada
+                - ✅ Prioriza zonas de alto riesgo
+                - ✅ Ideal para: Planificación preventiva
+                - 📊 Considera: Probabilidad × Severidad esperada
+                
+                **Minimize Response Time (Minimizar Tiempo de Respuesta)**:
+                - 🎯 Minimiza el tiempo promedio de llegada
+                - ✅ Prioriza cobertura geográfica
+                - ✅ Ideal para: Respuesta rápida a emergencias
+                - 📊 Considera: Distancia × Riesgo
+                """)
+            
             objective = st.selectbox(
                 "Objetivo de Optimización",
                 ["minimize_damage", "minimize_response_time"],
-                index=0
+                index=0,
+                help="Elige qué minimizar: daño esperado o tiempo de respuesta"
             )
         
         if st.button("⚙️ Optimizar Asignación", type="primary", use_container_width=True):

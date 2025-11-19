@@ -56,9 +56,13 @@ Esto generará el dataset consolidado en `data/processed/conaf_datos_reales_comp
 
 ```bash
 streamlit run dashboard.py
+# O también:
+streamlit run streamlit_app.py
 ```
 
 El dashboard estará disponible en `http://localhost:8501`
+
+**Nota**: `streamlit_app.py` es el archivo que Streamlit Cloud busca automáticamente.
 
 ## 📁 Estructura del Proyecto
 

@@ -88,7 +88,7 @@ git push -u origin main
 4. **Configura tu app**:
    - **Repository**: Selecciona `TU_USUARIO/incendios-chile`
    - **Branch**: `main`
-   - **Main file path**: `dashboard.py`
+   - **Main file path**: `streamlit_app.py` (o `dashboard.py` - ambos funcionan)
    - **Python version**: `3.9` (o la que prefieras, 3.9+)
 5. **Click en "Deploy!"**
 6. ⏳ Espera unos minutos mientras Streamlit Cloud:
