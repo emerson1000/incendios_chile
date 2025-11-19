@@ -533,6 +533,16 @@ with tab2:
         with col2:
             st.subheader("Entrenamiento")
             
+            # Información importante sobre cómo funcionan los modelos
+            st.info("""
+            **📝 ¿Cómo funcionan los modelos?**
+            
+            - **Se entrenan sobre la marcha**: Al hacer clic en "Entrenar Modelo", se entrena un nuevo modelo con los datos filtrados.
+            - **Se guardan en la sesión**: Una vez entrenado, el modelo permanece disponible durante tu sesión de navegador.
+            - **No hay modelos pre-entrenados**: Cada usuario debe entrenar su propio modelo, lo que permite ajustarlo a datos específicos.
+            - **Se pierden al cerrar**: Si cierras el navegador, necesitarás entrenar el modelo nuevamente.
+            """)
+            
             # Información sobre el entrenamiento
             st.info(f"""
             **Datos para entrenar:**
@@ -552,21 +562,35 @@ with tab2:
                             'area_quemada_ha': 'sum'
                         }).reset_index()
                         
-                        # Crear variable objetivo
-                        if task_type == 'classification':
-                            panel_df['target'] = (panel_df['num_incendios'] > 0).astype(int)
-                        else:
-                            panel_df['target'] = panel_df['num_incendios']
+                        # Preparar datos para ML
+                        # Agregar features básicas temporales primero
+                        panel_df['mes'] = 1  # Feature temporal básica
+                        panel_df['dia_anio'] = panel_df['anio'] * 365  # Día del año aproximado
                         
-                        # Agregar features básicas
-                        panel_df['mes'] = 1
-                        panel_df['dia_anio'] = panel_df['anio'] * 365
+                        # Agregar features históricas básicas por comuna
+                        historico_comuna = df_filtrado.groupby('comuna').agg({
+                            'num_incendios': ['sum', 'mean', 'max'],
+                            'area_quemada_ha': 'sum'
+                        }).reset_index()
+                        historico_comuna.columns = ['comuna', 'incendios_total_hist', 'incendios_promedio_hist', 'incendios_max_hist', 'area_total_hist']
+                        panel_df = panel_df.merge(historico_comuna, on='comuna', how='left')
+                        
+                        # Crear variable objetivo - usar el nombre que espera prepare_features
+                        if task_type == 'classification':
+                            # Para clasificación: 1 = hubo incendio, 0 = no hubo
+                            panel_df['incendio_ocurrencia'] = (panel_df['num_incendios'] > 0).astype(int)
+                            target_col = 'incendio_ocurrencia'
+                        else:
+                            # Para regresión: queremos predecir el número de incendios
+                            # Pero prepare_features espera 'incendio_ocurrencia', así que usamos num_incendios como target
+                            panel_df['incendio_ocurrencia'] = panel_df['num_incendios'].copy()
+                            target_col = 'incendio_ocurrencia'
                         
                         # Crear predictor
                         predictor = FireRiskPredictor(model_type=model_type, task=task_type)
                         
-                        # Preparar features
-                        X, y = predictor.prepare_features(panel_df)
+                        # Preparar features - pasar el nombre de la columna objetivo
+                        X, y = predictor.prepare_features(panel_df, target_col=target_col)
                         
                         # Entrenar
                         metrics = predictor.train(X, y, validation_size=0.2, temporal_split=True)
@@ -619,6 +643,7 @@ with tab2:
         
         # Predicción de riesgo
         if st.session_state.predictor is not None:
+            st.success("✅ Modelo entrenado y listo para hacer predicciones")
             st.markdown("---")
             st.subheader("🗺️ Mapa de Riesgo")
             
@@ -643,7 +668,8 @@ with tab2:
                         historico_comuna.columns = ['comuna', 'incendios_total', 'incendios_promedio', 'incendios_max', 'area_total']
                         pred_df = pred_df.merge(historico_comuna, on='comuna', how='left')
                         
-                        X_pred, _ = st.session_state.predictor.prepare_features(pred_df)
+                        # Preparar features para predicción - pasar target_col aunque no se use
+                        X_pred, _ = st.session_state.predictor.prepare_features(pred_df, target_col='incendio_ocurrencia')
                         
                         if task_type == 'classification':
                             riesgos = st.session_state.predictor.predict(X_pred, return_proba=True)
@@ -697,7 +723,18 @@ with tab2:
                 except Exception as e:
                     st.error(f"Error al mostrar mapa de riesgo: {e}")
         else:
-            st.info("💡 Entrena un modelo primero para generar predicciones de riesgo")
+            st.warning("""
+            ⚠️ **No hay modelo entrenado**
+            
+            Para hacer predicciones:
+            1. Ve a la sección "Entrenamiento" arriba
+            2. Selecciona el tipo de modelo (XGBoost, LightGBM o Random Forest) y tarea (Clasificación o Regresión)
+            3. Haz clic en "🚀 Entrenar Modelo"
+            4. Una vez entrenado, podrás generar mapas de riesgo aquí
+            
+            **💡 Nota**: El modelo se entrena con los datos que filtres en la barra lateral (años, región, comuna). 
+            El modelo se guarda en tu sesión de navegador y se pierde al cerrar la pestaña.
+            """)
 
 # ===== TAB 3: Optimización de Recursos =====
 with tab3:
