@@ -132,8 +132,9 @@ try:
         with st.spinner("Cargando datos de CONAF..."):
             st.session_state.conaf_data = load_conaf_data()
 
-    if st.session_state.conaf_data is None:
-        st.error("❌ No se encontraron datos reales de CONAF")
+    if st.session_state.conaf_data is None or len(st.session_state.conaf_data) == 0:
+        # Mostrar mensaje de error claramente ANTES de detenerse
+        st.error("❌ **No se encontraron datos de CONAF**")
         st.warning("""
         **El dataset procesado no está disponible.**
         
@@ -141,7 +142,6 @@ try:
         esté en el repositorio de GitHub.
         """)
         
-        # No usar st.stop() - mejor mostrar información útil
         st.info("""
         **Para solucionar:**
         1. Verifica que el archivo existe en GitHub: `data/processed/conaf_datos_reales_completo.csv`
@@ -155,31 +155,59 @@ try:
         """)
         
         # Mostrar información de debug
-        with st.expander("🔍 Información de Debug"):
+        with st.expander("🔍 Información de Debug", expanded=True):
             data_path = Path("data/processed/conaf_datos_reales_completo.csv")
-            st.write(f"**Ruta esperada:** {data_path.absolute()}")
-            st.write(f"**Existe:** {data_path.exists()}")
+            st.write(f"**Ruta esperada:** `{data_path}`")
+            st.write(f"**Ruta absoluta:** `{data_path.absolute()}`")
+            st.write(f"**Existe:** `{data_path.exists()}`")
+            
             if data_path.exists():
-                st.write(f"**Tamaño:** {data_path.stat().st_size:,} bytes")
+                st.success(f"✅ Archivo encontrado: {data_path.stat().st_size:,} bytes")
+            else:
+                st.error("❌ Archivo NO encontrado")
             
             # Listar archivos en data/processed
             processed_dir = Path("data/processed")
+            st.write(f"\n**Directorio data/processed existe:** `{processed_dir.exists()}`")
             if processed_dir.exists():
                 st.write("**Archivos en data/processed:**")
-                for f in processed_dir.iterdir():
-                    st.write(f"  - {f.name} ({f.stat().st_size:,} bytes)")
+                files = list(processed_dir.iterdir())
+                if files:
+                    for f in files:
+                        st.write(f"  - `{f.name}` ({f.stat().st_size:,} bytes)")
+                else:
+                    st.write("  (vacío)")
+            else:
+                st.write("  (directorio no existe)")
         
-        # No detener la ejecución completamente - permitir que el usuario vea el error
-        st.stop()
+        # Mostrar que la app está funcionando pero sin datos
+        st.sidebar.warning("⚠️ Dashboard sin datos - Ver información arriba")
+        
+        # NO usar st.stop() aquí - dejar que se muestre el error
+        # En su lugar, crear un DataFrame vacío para evitar errores posteriores
+        st.session_state.conaf_data = pd.DataFrame(columns=['comuna', 'region', 'anio', 'num_incendios', 'area_quemada_ha'])
+        
 except Exception as e:
-    st.error(f"❌ Error al inicializar datos: {e}")
+    st.error(f"❌ **Error al inicializar datos**")
+    st.exception(e)
     import traceback
-    with st.expander("🔍 Detalles del error"):
+    with st.expander("🔍 Detalles técnicos del error", expanded=True):
         st.code(traceback.format_exc())
-    st.stop()
+    
+    # Crear DataFrame vacío para evitar más errores
+    st.session_state.conaf_data = pd.DataFrame(columns=['comuna', 'region', 'anio', 'num_incendios', 'area_quemada_ha'])
+    st.sidebar.error(f"Error: {str(e)[:50]}...")
 
-# Obtener datos base
+# Obtener datos base - verificar que existe
+if 'conaf_data' not in st.session_state or st.session_state.conaf_data is None:
+    # Si no hay datos, crear DataFrame vacío
+    st.session_state.conaf_data = pd.DataFrame(columns=['comuna', 'region', 'anio', 'num_incendios', 'area_quemada_ha'])
+
 df_base = st.session_state.conaf_data.copy()
+
+# Si no hay datos, mostrar advertencia pero continuar
+if len(df_base) == 0:
+    st.warning("⚠️ **No hay datos disponibles.** Por favor verifica la información de debug arriba.")
 
 # Sidebar - Filtros
 st.sidebar.header("⚙️ Filtros y Configuración")
