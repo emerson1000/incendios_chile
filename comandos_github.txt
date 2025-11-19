@@ -1,0 +1,39 @@
+# Comandos para subir a GitHub - Copia y pega
+
+# 1. Verificar que estás en el directorio correcto
+cd c:\Users\emers\OneDrive\Documentos\incendios
+
+# 2. Inicializar git (solo la primera vez)
+git init
+
+# 3. Agregar todos los archivos
+git add .
+
+# 4. Ver qué se va a subir
+git status
+
+# 5. Hacer commit inicial
+git commit -m "Initial commit: Sistema de predicción y optimización de recursos para incendios forestales Chile"
+
+# 6. Crear repositorio en GitHub primero en https://github.com/new
+#    Luego conecta con estos comandos:
+
+# 7. Agregar remote (REEMPLAZA TU_USUARIO con tu usuario de GitHub)
+git remote add origin https://github.com/TU_USUARIO/incendios-chile.git
+
+# 8. Renombrar rama a main
+git branch -M main
+
+# 9. Subir a GitHub
+git push -u origin main
+
+# Si GitHub pide usuario y contraseña:
+# Usuario: tu usuario de GitHub
+# Contraseña: Personal Access Token (no tu contraseña normal)
+#    Crear token en: GitHub → Settings → Developer settings → Personal access tokens
+
+# Para futuros cambios:
+# git add .
+# git commit -m "Descripción del cambio"
+# git push
+

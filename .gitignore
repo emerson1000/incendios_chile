@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.venv
+pip-log.txt
+pip-delete-this-directory.txt
+*.egg-info/
+dist/
+build/
+
+# Data - Excluir datos grandes pero mantener estructura
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+*.csv
+*.parquet
+*.feather
+*.pkl
+*.h5
+*.hdf5
+*.xlsx
+*.xls
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+logs/
+
+# Models - Excluir modelos entrenados (son muy grandes)
+models/*.pkl
+models/*.joblib
+models/*.h5
+!models/.gitkeep
+
+# Results - Excluir resultados generados
+results/
+outputs/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Temporal files
+*.tmp
+*.temp
+*.bak
+*~
+
+# Archivos de procesamiento temporal
+procesar_conaf_*.py
+limpiar_*.py
+extraer_*.py
+test_*.py
+inspect_*.py
+CAMBIOS_*.md
+INSTRUCCIONES_*.md
+MEJORAS_*.md
+RESUMEN_*.md
+limpiar_cache_streamlit.md
