@@ -17,9 +17,16 @@ build/
 # Data - Excluir datos grandes pero mantener estructura
 data/raw/*
 !data/raw/.gitkeep
+
+# Excluir todos los archivos procesados EXCEPTO el dataset principal
 data/processed/*
 !data/processed/.gitkeep
+!data/processed/conaf_datos_reales_completo.csv
+
+# Excluir todos los CSVs EXCEPTO el dataset principal de CONAF
 *.csv
+!data/processed/conaf_datos_reales_completo.csv
+
 *.parquet
 *.feather
 *.pkl

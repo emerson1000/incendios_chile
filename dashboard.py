@@ -69,18 +69,60 @@ def load_conaf_data():
             st.error(f"Error al cargar datos: {e}")
             return None
     
-    # Si no existe, intentar procesar datos automáticamente
-    st.warning("⚠️ Dataset procesado no encontrado. Intentando procesar datos...")
-    try:
-        from src.data.conaf_smart_processor import SmartCONAFProcessor
-        processor = SmartCONAFProcessor()
-        df = processor.process_all_files()
-        if len(df) > 0:
-            st.success("✅ Datos procesados automáticamente")
-            return df
-    except Exception as e:
-        st.error(f"❌ No se pudieron procesar datos automáticamente: {e}")
-        st.info("💡 Por favor ejecuta: `python procesar_conaf_correctamente.py`")
+    # Si no existe, mostrar mensaje útil y sugerir alternativas
+    st.error("""
+    ❌ **Dataset procesado no encontrado**
+    
+    El archivo `data/processed/conaf_datos_reales_completo.csv` no está disponible.
+    """)
+    
+    with st.expander("🔧 Soluciones", expanded=True):
+        st.markdown("""
+        **Opción 1: Incluir dataset en el repositorio (Recomendado)**
+        
+        1. Edita `.gitignore` y agrega esta línea para permitir el dataset:
+           ```
+           !data/processed/conaf_datos_reales_completo.csv
+           ```
+        
+        2. Agrega el archivo al repositorio:
+           ```bash
+           git add data/processed/conaf_datos_reales_completo.csv
+           git commit -m "Add processed CONAF dataset"
+           git push
+           ```
+        
+        **Opción 2: Procesar datos automáticamente**
+        
+        El sistema puede intentar procesar datos automáticamente si los archivos raw
+        de CONAF están disponibles en `data/raw/`.
+        """)
+        
+        if st.button("🔄 Intentar Procesar Datos Automáticamente", type="secondary"):
+            with st.spinner("Buscando archivos CONAF raw para procesar..."):
+                try:
+                    from src.data.conaf_smart_processor import SmartCONAFProcessor
+                    processor = SmartCONAFProcessor()
+                    df = processor.process_all_files()
+                    if len(df) > 0:
+                        st.success(f"✅ Datos procesados automáticamente: {len(df):,} registros")
+                        # Guardar para uso futuro
+                        output_path = Path("data/processed/conaf_datos_reales_completo.csv")
+                        output_path.parent.mkdir(parents=True, exist_ok=True)
+                        df.to_csv(output_path, index=False)
+                        st.info("💾 Dataset guardado en `data/processed/conaf_datos_reales_completo.csv`")
+                        st.rerun()
+                    else:
+                        st.error("❌ No se encontraron archivos CONAF para procesar")
+                        st.info("💡 Por favor coloca los archivos Excel/XLS de CONAF en `data/raw/`")
+                except FileNotFoundError as e:
+                    st.error(f"❌ Archivos raw no encontrados: {e}")
+                    st.info("💡 Necesitas los archivos Excel/XLS de CONAF en `data/raw/`")
+                except Exception as e:
+                    st.error(f"❌ Error al procesar: {e}")
+                    import traceback
+                    with st.expander("Detalles del error"):
+                        st.code(traceback.format_exc())
     
     return None
 
