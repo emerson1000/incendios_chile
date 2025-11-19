@@ -380,7 +380,7 @@ with tab1:
                     color_continuous_scale='Oranges'
                 )
                 fig_top.update_layout(yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig_top, width='stretch')
+                st.plotly_chart(fig_top, width='stretch')
             except Exception as e:
                 st.error(f"Error al generar top comunas: {e}")
             
