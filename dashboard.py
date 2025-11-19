@@ -41,11 +41,8 @@ except Exception:
     # Si ya está configurado (desde streamlit_app.py), ignorar
     pass
 
-# Título principal
-st.title("🔥 Sistema de Predicción y Optimización de Recursos para Incendios Forestales")
-st.markdown("**Datos oficiales de CONAF - Chile (1985-2024)**")
-
-# Mensaje importante sobre filtros
+# NOTA: El título ya se muestra en streamlit_app.py para evitar duplicación
+# Solo mostramos el mensaje importante y separador
 st.info("💡 **IMPORTANTE:** Usa los filtros en la barra lateral (←) para seleccionar años, regiones y comunas específicas. Los datos se actualizarán automáticamente.")
 
 st.markdown("---")
