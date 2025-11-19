@@ -28,12 +28,18 @@ except ImportError as e:
     st.stop()
 
 # Configuración de la página
-st.set_page_config(
-    page_title="Sistema de Incendios Forestales - CONAF Chile",
-    page_icon="🔥",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# NOTA: Esta configuración puede ya haberse hecho en streamlit_app.py
+# Si ya está configurado, esta llamada será ignorada sin causar error
+try:
+    st.set_page_config(
+        page_title="Sistema de Incendios Forestales - CONAF Chile",
+        page_icon="🔥",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+except Exception:
+    # Si ya está configurado (desde streamlit_app.py), ignorar
+    pass
 
 # Título principal
 st.title("🔥 Sistema de Predicción y Optimización de Recursos para Incendios Forestales")
@@ -214,9 +220,16 @@ st.sidebar.header("⚙️ Filtros y Configuración")
 
 # Filtros en sidebar
 st.sidebar.subheader("📅 Filtro de Años")
-anos_disponibles = sorted(df_base['anio'].unique())
-ano_min = int(anos_disponibles[0]) if len(anos_disponibles) > 0 else 1985
-ano_max = int(anos_disponibles[-1]) if len(anos_disponibles) > 0 else 2023
+# Manejar caso cuando no hay datos o DataFrame está vacío
+if len(df_base) > 0 and 'anio' in df_base.columns:
+    anos_disponibles = sorted(df_base['anio'].dropna().unique())
+    ano_min = int(anos_disponibles[0]) if len(anos_disponibles) > 0 else 1985
+    ano_max = int(anos_disponibles[-1]) if len(anos_disponibles) > 0 else 2023
+else:
+    # Valores por defecto si no hay datos
+    anos_disponibles = []
+    ano_min = 1985
+    ano_max = 2023
 
 ano_inicio = st.sidebar.number_input(
     "Año Inicio",
@@ -242,8 +255,12 @@ if ano_inicio > ano_fin:
 
 # Filtro de regiones
 st.sidebar.subheader("🗺️ Filtro de Regiones")
-regiones_disponibles = sorted([r for r in df_base['region'].unique() if r != 'Sin Región' and pd.notna(r)])
-regiones_disponibles.insert(0, 'Todas las Regiones')
+# Manejar caso cuando no hay datos
+if len(df_base) > 0 and 'region' in df_base.columns:
+    regiones_disponibles = sorted([r for r in df_base['region'].dropna().unique() if r != 'Sin Región' and pd.notna(r)])
+    regiones_disponibles.insert(0, 'Todas las Regiones')
+else:
+    regiones_disponibles = ['Todas las Regiones']
 
 region_seleccionada = st.sidebar.selectbox(
     "Seleccionar Región",
@@ -254,13 +271,17 @@ region_seleccionada = st.sidebar.selectbox(
 
 # Filtro de comunas (depende de región)
 st.sidebar.subheader("🏘️ Filtro de Comunas")
-if region_seleccionada != 'Todas las Regiones':
-    df_filtrado_region = df_base[df_base['region'] == region_seleccionada]
-    comunas_disponibles = sorted([c for c in df_filtrado_region['comuna'].unique() if pd.notna(c)])
-    comunas_disponibles.insert(0, 'Todas las Comunas de la Región')
+# Manejar caso cuando no hay datos
+if len(df_base) > 0 and 'comuna' in df_base.columns:
+    if region_seleccionada != 'Todas las Regiones':
+        df_filtrado_region = df_base[df_base['region'] == region_seleccionada]
+        comunas_disponibles = sorted([c for c in df_filtrado_region['comuna'].dropna().unique() if pd.notna(c)])
+        comunas_disponibles.insert(0, 'Todas las Comunas de la Región')
+    else:
+        comunas_disponibles = sorted([c for c in df_base['comuna'].dropna().unique() if pd.notna(c)])
+        comunas_disponibles.insert(0, 'Todas las Comunas')
 else:
-    comunas_disponibles = sorted([c for c in df_base['comuna'].unique() if pd.notna(c)])
-    comunas_disponibles.insert(0, 'Todas las Comunas')
+    comunas_disponibles = ['Todas las Comunas']
 
 # Limitar comunas para no sobrecargar
 if len(comunas_disponibles) > 200:
