@@ -64,9 +64,19 @@ def load_conaf_data():
             df['anio'] = df['anio'].astype(int)
             # Limpiar comunas
             df['comuna'] = df['comuna'].astype(str).str.strip().str.title()
-            # Limpiar regiones
-            df['region'] = df['region'].astype(str).str.strip().str.upper()
-            df['region'] = df['region'].replace('NAN', 'Sin Región')
+            # Limpiar regiones - proceso robusto
+            # Convertir a string primero para manejar NaN
+            df['region'] = df['region'].astype(str)
+            # Reemplazar valores NaN de pandas (aparecen como 'nan' en string)
+            df['region'] = df['region'].replace(['nan', 'NaN', 'NAN', 'None', 'NONE', ''], 'Sin Región')
+            # Limpiar espacios
+            df['region'] = df['region'].str.strip()
+            # Convertir a mayúsculas para normalizar
+            df['region'] = df['region'].str.upper()
+            # Reemplazar cualquier variante de 'Sin Región' o valores inválidos
+            df.loc[df['region'].isin(['NAN', 'SIN REGIÓN', 'SIN REGION', 'SIN REGIóN', '']), 'region'] = 'Sin Región'
+            # Finalmente, usar fillna por si acaso
+            df['region'] = df['region'].fillna('Sin Región')
             return df
         except Exception as e:
             st.error(f"Error al cargar datos: {e}")
@@ -875,21 +885,39 @@ with tab4:
             
             with col2:
                 if region_seleccionada == 'Todas las Regiones':
-                    incendios_region = df_filtrado.groupby('region')['num_incendios'].sum().reset_index()
-                    incendios_region = incendios_region.sort_values('num_incendios', ascending=False).head(10)
+                    # Filtrar 'Sin Región' y valores inválidos antes de agrupar
+                    # Normalizar a mayúsculas para comparación
+                    df_region_clean = df_filtrado[
+                        (df_filtrado['region'].notna()) & 
+                        (df_filtrado['region'].astype(str).str.upper() != 'SIN REGIÓN') &
+                        (df_filtrado['region'].astype(str).str.upper() != 'SIN REGION') &
+                        (df_filtrado['region'].astype(str).str.upper() != 'SIN REGIóN') &
+                        (df_filtrado['region'] != 'Sin Región') &
+                        (df_filtrado['region'].astype(str) != 'nan') &
+                        (df_filtrado['region'].astype(str) != 'NAN')
+                    ].copy()
                     
-                    fig_region = px.bar(
-                        incendios_region,
-                        x='num_incendios',
-                        y='region',
-                        orientation='h',
-                        title='Top 10 Regiones con Más Incendios',
-                        labels={'num_incendios': 'Número de Incendios', 'region': 'Región'},
-                        color='num_incendios',
-                        color_continuous_scale='Reds'
-                    )
-                    fig_region.update_layout(yaxis={'categoryorder': 'total ascending'})
-                    st.plotly_chart(fig_region, width='stretch')
+                    if len(df_region_clean) > 0:
+                        incendios_region = df_region_clean.groupby('region')['num_incendios'].sum().reset_index()
+                        incendios_region = incendios_region.sort_values('num_incendios', ascending=False).head(10)
+                        
+                        if len(incendios_region) > 0:
+                            fig_region = px.bar(
+                                incendios_region,
+                                x='num_incendios',
+                                y='region',
+                                orientation='h',
+                                title='Top 10 Regiones con Más Incendios',
+                                labels={'num_incendios': 'Número de Incendios', 'region': 'Región'},
+                                color='num_incendios',
+                                color_continuous_scale='Reds'
+                            )
+                            fig_region.update_layout(yaxis={'categoryorder': 'total ascending'})
+                            st.plotly_chart(fig_region, width='stretch')
+                        else:
+                            st.info("No hay datos de regiones válidas para mostrar")
+                    else:
+                        st.warning("⚠️ Todos los registros tienen región 'Sin Región' o NaN. Verifica los datos.")
                 else:
                     comunas_region = df_filtrado.groupby('comuna')['num_incendios'].sum().reset_index()
                     comunas_region = comunas_region.sort_values('num_incendios', ascending=False).head(10)
