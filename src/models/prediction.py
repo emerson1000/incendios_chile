@@ -230,12 +230,24 @@ class FireRiskPredictor:
                 raise ValueError(error_msg)
         
         # Entrenar modelo con manejo de errores robusto
+        # Cada tipo de modelo tiene diferentes parámetros en fit()
         try:
-            self.model.fit(
-                X_train, y_train,
-                eval_set=[(X_val, y_val)] if self.model_type in ['xgboost', 'lightgbm'] else None,
-                verbose=False if self.model_type in ['xgboost', 'lightgbm'] else True
-            )
+            if self.model_type == 'xgboost':
+                # XGBoost acepta eval_set y verbose
+                self.model.fit(
+                    X_train, y_train,
+                    eval_set=[(X_val, y_val)],
+                    verbose=False
+                )
+            elif self.model_type == 'lightgbm':
+                # LightGBM acepta eval_set, pero NO acepta verbose (se configura en constructor)
+                self.model.fit(
+                    X_train, y_train,
+                    eval_set=[(X_val, y_val)]
+                )
+            else:
+                # Random Forest solo acepta X, y (no eval_set ni verbose)
+                self.model.fit(X_train, y_train)
         except ValueError as e:
             error_msg = str(e)
             if "classes" in error_msg.lower() or "class" in error_msg.lower():
