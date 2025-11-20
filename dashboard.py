@@ -266,23 +266,50 @@ st.sidebar.subheader("🗺️ Filtro de Regiones")
 # Manejar caso cuando no hay datos
 if len(df_base) > 0 and 'region' in df_base.columns:
     # Obtener todas las regiones únicas, excluyendo 'Sin Región' y valores inválidos
+    # IMPORTANTE: No normalizar aquí, usar los valores originales del dataframe
     regiones_unicas = df_base['region'].dropna().unique()
-    regiones_unicas = [r for r in regiones_unicas if r != 'Sin Región' and pd.notna(r) and str(r).strip() != '']
+    # Filtrar valores inválidos (normalizar solo para comparación)
+    regiones_unicas = [
+        r for r in regiones_unicas 
+        if pd.notna(r) 
+        and str(r).strip() != '' 
+        and str(r).strip().upper() not in ['SIN REGIÓN', 'SIN REGION', 'SIN REGIóN', 'NAN', 'NONE']
+    ]
     
     # Función para ordenar regiones de forma inteligente (numérica si tienen números)
     def ordenar_region(region):
         region_str = str(region).upper()
-        # Buscar números en el nombre de la región
-        numeros = re.findall(r'\d+', region_str)
-        if numeros:
-            # Si tiene números, ordenar por el primer número encontrado
-            return (0, int(numeros[0]))
-        else:
-            # Si no tiene números, ordenar alfabéticamente
-            return (1, region_str)
+        # Buscar números romanos o arábigos en el nombre de la región
+        # Mapeo de números romanos comunes
+        romanos = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 
+                  'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12,
+                  'XIII': 13, 'XIV': 14, 'XV': 15, 'XVI': 16}
+        
+        # Buscar números arábigos primero
+        numeros_arabigos = re.findall(r'\d+', region_str)
+        if numeros_arabigos:
+            return (0, int(numeros_arabigos[0]))
+        
+        # Buscar números romanos
+        for romano, valor in romanos.items():
+            if romano in region_str:
+                return (0, valor)
+        
+        # Si no tiene números, ordenar alfabéticamente
+        return (1, region_str)
     
     # Ordenar regiones
     regiones_disponibles = sorted(regiones_unicas, key=ordenar_region)
+    
+    # Debug: mostrar información sobre regiones disponibles
+    with st.sidebar.expander("🔍 Debug: Regiones disponibles", expanded=False):
+        st.write(f"**Total regiones encontradas:** {len(regiones_disponibles)}")
+        st.write("**Regiones:**")
+        for i, reg in enumerate(regiones_disponibles[:20], 1):
+            count = len(df_base[df_base['region'] == reg])
+            st.write(f"{i}. {reg} ({count:,} registros)")
+        if len(regiones_disponibles) > 20:
+            st.write(f"... y {len(regiones_disponibles) - 20} más")
 else:
     regiones_disponibles = []
 
@@ -300,20 +327,44 @@ st.sidebar.subheader("🏘️ Filtro de Comunas")
 if len(df_base) > 0 and 'comuna' in df_base.columns:
     # Si hay regiones seleccionadas, filtrar comunas por esas regiones
     if len(regiones_seleccionadas) > 0:
-        # Filtrar por las regiones seleccionadas (asegurar comparación correcta)
-        # Normalizar regiones en el dataframe para comparación
-        df_base_normalized = df_base.copy()
-        df_base_normalized['region_normalized'] = df_base_normalized['region'].astype(str).str.strip().str.upper()
-        regiones_seleccionadas_normalized = [str(r).strip().upper() for r in regiones_seleccionadas]
+        # IMPORTANTE: Comparar directamente con los valores del dataframe (ya están normalizados)
+        # Las regiones seleccionadas deben coincidir exactamente con los valores en df_base['region']
+        df_filtrado_region = df_base[df_base['region'].isin(regiones_seleccionadas)]
         
-        # Filtrar comunas que pertenecen a las regiones seleccionadas
-        df_filtrado_region = df_base_normalized[
-            df_base_normalized['region_normalized'].isin(regiones_seleccionadas_normalized)
-        ]
-        comunas_disponibles = sorted([c for c in df_filtrado_region['comuna'].dropna().unique() if pd.notna(c) and str(c).strip() != ''])
+        # Obtener comunas únicas del dataframe filtrado
+        comunas_unicas = df_filtrado_region['comuna'].dropna().unique()
+        comunas_disponibles = sorted([
+            c for c in comunas_unicas 
+            if pd.notna(c) 
+            and str(c).strip() != ''
+            and str(c).strip().upper() not in ['NAN', 'NONE', 'CORPORACION', 'NACIONAL', 'FORESTAL']
+        ])
+        
+        # Debug: mostrar información sobre comunas disponibles
+        with st.sidebar.expander("🔍 Debug: Comunas disponibles", expanded=False):
+            st.write(f"**Regiones seleccionadas:** {', '.join(regiones_seleccionadas)}")
+            st.write(f"**Total comunas encontradas:** {len(comunas_disponibles)}")
+            st.write(f"**Registros en regiones seleccionadas:** {len(df_filtrado_region):,}")
+            if len(comunas_disponibles) > 0:
+                st.write("**Primeras 10 comunas:**")
+                for i, com in enumerate(comunas_disponibles[:10], 1):
+                    count = len(df_filtrado_region[df_filtrado_region['comuna'] == com])
+                    st.write(f"{i}. {com} ({count:,} registros)")
+            else:
+                st.warning("⚠️ No se encontraron comunas para las regiones seleccionadas")
+                # Debug adicional: ver qué regiones hay realmente en los datos
+                st.write("**Debug adicional:**")
+                st.write(f"Regiones en df_base: {df_base['region'].unique()[:10]}")
+                st.write(f"Regiones seleccionadas: {regiones_seleccionadas}")
     else:
         # Si no hay regiones seleccionadas, mostrar todas las comunas
-        comunas_disponibles = sorted([c for c in df_base['comuna'].dropna().unique() if pd.notna(c) and str(c).strip() != ''])
+        comunas_unicas = df_base['comuna'].dropna().unique()
+        comunas_disponibles = sorted([
+            c for c in comunas_unicas 
+            if pd.notna(c) 
+            and str(c).strip() != ''
+            and str(c).strip().upper() not in ['NAN', 'NONE', 'CORPORACION', 'NACIONAL', 'FORESTAL']
+        ])
 else:
     comunas_disponibles = []
 
@@ -334,11 +385,8 @@ try:
     
     # Filtrar por regiones seleccionadas (si hay alguna seleccionada)
     if len(regiones_seleccionadas) > 0:
-        # Normalizar para comparación
-        df_filtrado['region_normalized'] = df_filtrado['region'].astype(str).str.strip().str.upper()
-        regiones_seleccionadas_normalized = [str(r).strip().upper() for r in regiones_seleccionadas]
-        df_filtrado = df_filtrado[df_filtrado['region_normalized'].isin(regiones_seleccionadas_normalized)]
-        df_filtrado = df_filtrado.drop(columns=['region_normalized'])
+        # Comparar directamente - las regiones en df_base ya están normalizadas a mayúsculas
+        df_filtrado = df_filtrado[df_filtrado['region'].isin(regiones_seleccionadas)]
     
     # Filtrar por comunas seleccionadas (si hay alguna seleccionada)
     if len(comunas_seleccionadas) > 0:
