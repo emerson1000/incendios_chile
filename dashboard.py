@@ -289,6 +289,25 @@ def load_conaf_data():
                         # Normalizar la región encontrada
                         df.loc[idx, 'region'] = normalizar_region(region_encontrada)
             
+            # Validar y limpiar datos numéricos
+            # Asegurar que num_incendios y area_quemada_ha sean numéricos
+            if 'num_incendios' in df.columns:
+                df['num_incendios'] = pd.to_numeric(df['num_incendios'], errors='coerce').fillna(0).astype(int)
+            
+            if 'area_quemada_ha' in df.columns:
+                df['area_quemada_ha'] = pd.to_numeric(df['area_quemada_ha'], errors='coerce').fillna(0)
+                # Asegurar que no haya valores negativos
+                df['area_quemada_ha'] = df['area_quemada_ha'].clip(lower=0)
+            
+            # Validar consistencia: si hay incendios pero área es 0, puede ser válido (incendios muy pequeños)
+            # pero también puede ser un error. Ajustar casos donde num_incendios > 0 y area_quemada_ha == 0
+            # Asignar un mínimo razonable (0.01 ha = 100 m²) para incendios muy pequeños
+            inconsistencias = (df['num_incendios'] > 0) & (df['area_quemada_ha'] == 0)
+            if inconsistencias.any():
+                # Para incendios registrados pero sin área, asignar un mínimo razonable
+                # Esto representa incendios muy pequeños (< 1 ha) que fueron controlados rápidamente
+                df.loc[inconsistencias, 'area_quemada_ha'] = 0.01  # 0.01 ha = 100 m² (mínimo razonable)
+            
             return df
         except Exception as e:
             st.error(f"Error al cargar datos: {e}")
@@ -616,6 +635,23 @@ with tab1:
         st.warning("⚠️ No hay datos para los filtros seleccionados. Por favor ajusta los filtros en la barra lateral.")
     else:
         try:
+            # Información sobre calidad de datos
+            if 'num_incendios' in df_filtrado.columns and 'area_quemada_ha' in df_filtrado.columns:
+                # Contar casos con incendios pero área muy pequeña o cero
+                incendios_pequenos = ((df_filtrado['num_incendios'] > 0) & (df_filtrado['area_quemada_ha'] < 0.1)).sum()
+                if incendios_pequenos > 0:
+                    with st.expander("ℹ️ Nota sobre calidad de datos", expanded=False):
+                        st.info(f"""
+                        **Incendios con área muy pequeña (< 0.1 ha):** {incendios_pequenos:,} registros
+                        
+                        Estos casos representan:
+                        - ✅ **Incendios muy pequeños** controlados rápidamente (< 1,000 m²)
+                        - ✅ **Incendios que no alcanzaron 1 hectárea** (redondeados a 0.01 ha)
+                        - ⚠️ **Posibles errores en los datos originales** (incendios registrados sin área medida)
+                        
+                        Para mantener la consistencia, se ha asignado un mínimo de 0.01 ha (100 m²) a estos casos.
+                        """)
+            
             # Métricas principales
             col1, col2, col3, col4 = st.columns(4)
             
