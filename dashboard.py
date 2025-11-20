@@ -887,17 +887,55 @@ with tab2:
                         panel_df['area_quemada_ha'] = panel_df['area_quemada_ha'].fillna(0)
                         
                         # Preparar datos para ML
-                        # Agregar features básicas temporales primero
+                        # Agregar features temporales más robustas
                         panel_df['mes'] = 1  # Feature temporal básica
                         panel_df['dia_anio'] = panel_df['anio'] * 365  # Día del año aproximado
                         
-                        # Agregar features históricas básicas por comuna
+                        # Feature de año (normalizado para ayudar al modelo)
+                        anos_unicos = sorted(panel_df['anio'].unique())
+                        ano_min = min(anos_unicos)
+                        ano_max = max(anos_unicos)
+                        panel_df['anio_normalizado'] = (panel_df['anio'] - ano_min) / (ano_max - ano_min + 1e-10)
+                        
+                        # Features cíclicas temporales (para capturar patrones estacionales)
+                        panel_df['mes_sin'] = np.sin(2 * np.pi * panel_df['mes'] / 12)
+                        panel_df['mes_cos'] = np.cos(2 * np.pi * panel_df['mes'] / 12)
+                        
+                        # Agregar features históricas básicas por comuna (promedios históricos)
                         historico_comuna = df_filtrado.groupby('comuna').agg({
-                            'num_incendios': ['sum', 'mean', 'max'],
-                            'area_quemada_ha': 'sum'
+                            'num_incendios': ['sum', 'mean', 'max', 'std'],
+                            'area_quemada_ha': ['sum', 'mean']
                         }).reset_index()
-                        historico_comuna.columns = ['comuna', 'incendios_total_hist', 'incendios_promedio_hist', 'incendios_max_hist', 'area_total_hist']
+                        historico_comuna.columns = ['comuna', 'incendios_total_hist', 'incendios_promedio_hist', 
+                                                    'incendios_max_hist', 'incendios_std_hist', 
+                                                    'area_total_hist', 'area_promedio_hist']
                         panel_df = panel_df.merge(historico_comuna, on='comuna', how='left')
+                        
+                        # Agregar features históricas temporales (incendios en años anteriores)
+                        # Para cada comuna-año, calcular incendios en años anteriores
+                        panel_df = panel_df.sort_values(['comuna', 'anio'])
+                        panel_df['incendios_anio_anterior'] = panel_df.groupby('comuna')['num_incendios'].shift(1).fillna(0)
+                        panel_df['incendios_2_anios_antes'] = panel_df.groupby('comuna')['num_incendios'].shift(2).fillna(0)
+                        panel_df['area_anio_anterior'] = panel_df.groupby('comuna')['area_quemada_ha'].shift(1).fillna(0)
+                        
+                        # Promedio móvil de últimos 3 años
+                        panel_df['incendios_promedio_3_anios'] = (
+                            panel_df.groupby('comuna')['num_incendios']
+                            .transform(lambda x: x.rolling(window=3, min_periods=1).mean().shift(1))
+                            .fillna(0)  # Si no hay datos anteriores, usar 0
+                        )
+                        
+                        # Llenar NaN en features históricas con 0
+                        features_historicas = ['incendios_total_hist', 'incendios_promedio_hist', 
+                                              'incendios_max_hist', 'incendios_std_hist', 
+                                              'area_total_hist', 'area_promedio_hist']
+                        for feat in features_historicas:
+                            if feat in panel_df.columns:
+                                panel_df[feat] = panel_df[feat].fillna(0)
+                        
+                        # Llenar NaN en features temporales con valores razonables
+                        panel_df['incendios_std_hist'] = panel_df['incendios_std_hist'].fillna(0)
+                        panel_df['incendios_promedio_3_anios'] = panel_df['incendios_promedio_3_anios'].fillna(0)
                         
                         # Crear variable objetivo - usar el nombre que espera prepare_features
                         if task_type == 'classification':
@@ -915,6 +953,31 @@ with tab2:
                         
                         # Preparar features - pasar el nombre de la columna objetivo
                         X, y = predictor.prepare_features(panel_df, target_col=target_col)
+                        
+                        # Diagnóstico antes de entrenar
+                        if task_type == 'regression':
+                            with st.expander("🔍 Diagnóstico de Datos para Regresión", expanded=True):
+                                st.markdown(f"""
+                                **Distribución del target (num_incendios):**
+                                - Total de muestras: {len(y):,}
+                                - Mínimo: {y.min():.0f}
+                                - Máximo: {y.max():.0f}
+                                - Media: {y.mean():.3f}
+                                - Mediana: {y.median():.3f}
+                                - Desviación estándar: {y.std():.3f}
+                                - Muestras con 0 incendios: {(y == 0).sum():,} ({(y == 0).mean()*100:.1f}%)
+                                - Muestras con >0 incendios: {(y > 0).sum():,} ({(y > 0).mean()*100:.1f}%)
+                                
+                                **Features disponibles:**
+                                - Número de features: {len(X.columns)}
+                                - Features: {', '.join(X.columns[:10].tolist())}{'...' if len(X.columns) > 10 else ''}
+                                
+                                **💡 Nota:** Un R² negativo indica que el modelo predice peor que simplemente usar la media del target.
+                                Esto puede ocurrir si:
+                                - Las features no son suficientemente informativas
+                                - Hay muchos valores cero (datos esparcidos)
+                                - El modelo necesita más datos o features más relevantes
+                                """)
                         
                         # Entrenar
                         metrics = predictor.train(X, y, validation_size=0.2, temporal_split=True)
@@ -988,23 +1051,57 @@ with tab2:
                             with col_m3:
                                 r2_val = float(metrics.get('r2', 0))
                                 st.markdown(f"**R²:**")
-                                st.markdown(f"### {r2_val:.3f}")
-                                st.caption("Coeficiente de determinación (1.0 = perfecto, 0.0 = aleatorio)")
+                                
+                                # Mostrar R² con color según su valor
+                                if r2_val < 0:
+                                    st.markdown(f"### ⚠️ {r2_val:.3f}")
+                                    st.caption("⚠️ **NEGATIVO**: El modelo es peor que predecir la media")
+                                elif r2_val < 0.3:
+                                    st.markdown(f"### ⚠️ {r2_val:.3f}")
+                                    st.caption("⚠️ **BAJO**: El modelo explica poca variabilidad")
+                                elif r2_val < 0.7:
+                                    st.markdown(f"### {r2_val:.3f}")
+                                    st.caption("⚠️ **MODERADO**: El modelo explica variabilidad moderada")
+                                else:
+                                    st.markdown(f"### ✅ {r2_val:.3f}")
+                                    st.caption("✅ **ALTO**: El modelo explica mucha variabilidad")
                             
                             # Información adicional sobre interpretación
-                            st.info(f"""
-                            **Interpretación de métricas de regresión:**
-                            
-                            - **RMSE ({rmse_val:.3f})**: Error promedio en la misma unidad que el target. 
-                              Indica cuántos incendios se predice incorrectamente en promedio.
-                            
-                            - **MAE ({mae_val:.3f})**: Error absoluto promedio. Más fácil de interpretar que RMSE.
-                            
-                            - **R² ({r2_val:.3f})**: Porcentaje de variabilidad explicada por el modelo.
-                              - R² = 1.0: Predicción perfecta
-                              - R² = 0.0: El modelo no es mejor que predecir la media
-                              - R² < 0.0: El modelo es peor que predecir la media
-                            """)
+                            if r2_val < 0:
+                                st.error(f"""
+                                **⚠️ R² NEGATIVO ({r2_val:.3f}) - El modelo está funcionando muy mal:**
+                                
+                                Esto significa que el modelo predice **peor que simplemente usar la media** del target.
+                                
+                                **Posibles causas:**
+                                1. **Features insuficientes**: Las features no capturan patrones relevantes
+                                2. **Datos esparcidos**: Muchos valores en cero hacen difícil aprender patrones
+                                3. **Overfitting**: El modelo memoriza el entrenamiento pero no generaliza
+                                4. **Split temporal problemático**: Datos de validación muy diferentes a entrenamiento
+                                5. **Modelo inadecuado**: El algoritmo puede no ser el mejor para estos datos
+                                
+                                **Soluciones sugeridas:**
+                                - ✅ Usa **classification** en lugar de regression (predice ocurrencia, no cantidad)
+                                - ✅ Incluye más features relevantes (datos climáticos, geográficos)
+                                - ✅ Aumenta el rango de años en los filtros
+                                - ✅ Considera transformar el target (log, binning)
+                                """)
+                            else:
+                                st.info(f"""
+                                **Interpretación de métricas de regresión:**
+                                
+                                - **RMSE ({rmse_val:.3f})**: Error promedio en la misma unidad que el target. 
+                                  Indica cuántos incendios se predice incorrectamente en promedio.
+                                  {f"⚠️ Alto: {rmse_val:.1f} errores en promedio" if rmse_val > 10 else "✅ Razonable"}
+                                
+                                - **MAE ({mae_val:.3f})**: Error absoluto promedio. Más fácil de interpretar que RMSE.
+                                
+                                - **R² ({r2_val:.3f})**: Porcentaje de variabilidad explicada por el modelo.
+                                  - R² = 1.0: Predicción perfecta
+                                  - R² = 0.0: El modelo no es mejor que predecir la media
+                                  - R² < 0.0: El modelo es peor que predecir la media ⚠️
+                                  - R² > 0.7: Buen ajuste ✅
+                                """)
                         
                         # Feature importance
                         if predictor.feature_importance is not None and len(predictor.feature_importance) > 0:
