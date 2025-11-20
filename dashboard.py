@@ -923,8 +923,11 @@ with tab2:
                         st.session_state.predictor = predictor
                         st.session_state.panel_data = panel_df
                         st.session_state.task_type = task_type  # Guardar tipo de tarea para predicción
+                        st.session_state.model_type = model_type  # Guardar tipo de modelo para validación
+                        # Limpiar mapa de riesgo anterior cuando se entrena un nuevo modelo
+                        st.session_state.risk_map = None
                         
-                        st.success("✅ Modelo entrenado exitosamente con datos reales")
+                        st.success(f"✅ Modelo {model_type.upper()} ({task_type}) entrenado exitosamente con datos reales")
                         
                         # Mostrar métricas
                         st.subheader("📊 Métricas del Modelo")
@@ -986,7 +989,28 @@ with tab2:
         
         # Predicción de riesgo
         if st.session_state.predictor is not None:
-            st.success("✅ Modelo entrenado y listo para hacer predicciones")
+            # Mostrar información del modelo actual
+            model_type_actual = st.session_state.get('model_type', 'desconocido')
+            task_type_actual = st.session_state.get('task_type', 'desconocido')
+            st.success(f"✅ Modelo {model_type_actual.upper()} ({task_type_actual}) entrenado y listo para hacer predicciones")
+            
+            # Mostrar advertencia si el modelo actual no coincide con el seleccionado
+            if model_type_actual != model_type:
+                st.warning(f"⚠️ **IMPORTANTE:** El modelo actualmente entrenado es **{model_type_actual.upper()}**, pero has seleccionado **{model_type.upper()}** en el selector. "
+                          f"Las predicciones usarán el modelo **{model_type_actual.upper()}** que está actualmente entrenado. "
+                          f"Para usar **{model_type.upper()}**, haz clic en '🚀 Entrenar Modelo' con el tipo seleccionado.")
+            
+            # Mostrar información sobre el modelo actual
+            with st.expander("ℹ️ Información del Modelo Actual", expanded=False):
+                st.markdown(f"""
+                **Modelo actualmente entrenado:** {model_type_actual.upper()}  
+                **Tipo de tarea:** {task_type_actual}  
+                **Modelo seleccionado en el selector:** {model_type.upper()}  
+                
+                **💡 Nota:** Si quieres cambiar el modelo, selecciona el tipo de modelo que deseas y haz clic en "🚀 Entrenar Modelo". 
+                Cada modelo (XGBoost, LightGBM, Random Forest) puede dar resultados diferentes incluso con los mismos datos.
+                """)
+            
             st.markdown("---")
             st.subheader("🗺️ Mapa de Riesgo")
             
@@ -1018,31 +1042,80 @@ with tab2:
                         # Obtener task_type de session_state si existe
                         task_type_pred = st.session_state.get('task_type', 'classification')
                         
-                        # Preparar features para predicción - pasar target_col aunque no se use
-                        X_pred, _ = st.session_state.predictor.prepare_features(pred_df, target_col='incendio_ocurrencia')
-                        
-                        if task_type_pred == 'classification':
-                            riesgos = st.session_state.predictor.predict(X_pred, return_proba=True)
+                        # Validar que el modelo está entrenado
+                        if st.session_state.predictor.model is None:
+                            st.error("❌ Error: El modelo no está entrenado. Por favor entrena el modelo primero.")
                         else:
-                            predicciones = st.session_state.predictor.predict(X_pred)
-                            riesgos = (predicciones - predicciones.min()) / (predicciones.max() - predicciones.min() + 1e-10)
-                        
-                        risk_map = pd.DataFrame({
-                            'comuna': comunas_unicas,
-                            'riesgo_probabilidad': riesgos,
-                            'incendios_historico': historico_comuna['incendios_total'].values,
-                            'area_historica': historico_comuna['area_total'].values
-                        })
-                        
-                        st.session_state.risk_map = risk_map
-                        st.success("✅ Mapa de riesgo generado")
+                            # Mostrar información del modelo que se está usando
+                            model_type_usado = st.session_state.get('model_type', 'desconocido')
+                            task_type_usado = st.session_state.get('task_type', 'desconocido')
+                            
+                            st.info(f"🔍 Usando modelo **{model_type_usado.upper()}** ({task_type_usado}) para predicción")
+                            
+                            # Preparar features para predicción - pasar target_col aunque no se use
+                            X_pred, _ = st.session_state.predictor.prepare_features(pred_df, target_col='incendio_ocurrencia')
+                            
+                            # Verificar que las features son correctas
+                            if X_pred is None or len(X_pred) == 0:
+                                st.error("❌ Error: No se pudieron preparar las features para predicción")
+                            else:
+                                st.info(f"📊 Prediciendo riesgo para {len(X_pred)} comunas con {len(X_pred.columns)} features")
+                                
+                                # Mostrar estadísticas de las predicciones
+                                if task_type_pred == 'classification':
+                                    riesgos = st.session_state.predictor.predict(X_pred, return_proba=True)
+                                else:
+                                    predicciones = st.session_state.predictor.predict(X_pred)
+                                    riesgos = (predicciones - predicciones.min()) / (predicciones.max() - predicciones.min() + 1e-10)
+                                
+                                # Mostrar estadísticas detalladas de las predicciones
+                                st.info(f"📈 Estadísticas de predicción del modelo **{model_type_usado.upper()}**: "
+                                       f"Min={riesgos.min():.4f}, "
+                                       f"Max={riesgos.max():.4f}, "
+                                       f"Mean={riesgos.mean():.4f}, "
+                                       f"Std={riesgos.std():.4f}, "
+                                       f"Median={np.median(riesgos):.4f}")
+                                
+                                # Mostrar información de debug para verificar que el modelo es diferente
+                                if hasattr(st.session_state.predictor.model, 'n_estimators'):
+                                    n_estimators = st.session_state.predictor.model.n_estimators
+                                    st.info(f"🔍 Debug: Modelo {model_type_usado} con {n_estimators} estimadores")
+                                
+                                # Verificar que hay variabilidad en las predicciones
+                                if riesgos.std() < 0.001:
+                                    st.warning("⚠️ **Advertencia:** Las predicciones tienen muy poca variabilidad (std < 0.001). "
+                                              "Esto podría indicar que el modelo está prediciendo valores muy similares para todas las comunas. "
+                                              "Esto es normal si las features históricas son muy similares entre comunas o si el modelo tiene un sesgo fuerte.")
+                                
+                                risk_map = pd.DataFrame({
+                                    'comuna': comunas_unicas,
+                                    'riesgo_probabilidad': riesgos,
+                                    'incendios_historico': historico_comuna['incendios_total'].values,
+                                    'area_historica': historico_comuna['area_total'].values
+                                })
+                                
+                                # Guardar también el tipo de modelo usado para esta predicción
+                                risk_map['modelo_usado'] = model_type_usado
+                                risk_map['task_type'] = task_type_usado
+                                
+                                st.session_state.risk_map = risk_map
+                                st.success(f"✅ Mapa de riesgo generado usando modelo {model_type_usado.upper()}")
                         
                     except Exception as e:
                         st.error(f"Error al generar mapa de riesgo: {str(e)}")
             
             # Mostrar mapa de riesgo
             if st.session_state.risk_map is not None:
-                risk_map = st.session_state.risk_map
+                risk_map = st.session_state.risk_map.copy()
+                
+                # Mostrar información del modelo usado para esta predicción
+                modelo_usado_pred = risk_map.get('modelo_usado', st.session_state.get('model_type', 'desconocido')).iloc[0] if 'modelo_usado' in risk_map.columns else st.session_state.get('model_type', 'desconocido')
+                task_usado_pred = risk_map.get('task_type', st.session_state.get('task_type', 'desconocido')).iloc[0] if 'task_type' in risk_map.columns else st.session_state.get('task_type', 'desconocido')
+                
+                st.info(f"📊 Mapa de riesgo generado con modelo **{modelo_usado_pred.upper()}** ({task_usado_pred})")
+                
+                # Eliminar columnas de metadatos para mostrar
+                columnas_mostrar = ['comuna', 'riesgo_probabilidad', 'incendios_historico', 'area_historica']
                 
                 st.subheader("📋 Riesgo por Comuna")
                 try:
@@ -1053,8 +1126,11 @@ with tab2:
                         labels=['Bajo', 'Medio', 'Alto']
                     )
                     
+                    # Filtrar columnas para mostrar (excluir metadatos)
+                    columnas_display = [col for col in ['comuna', 'riesgo_probabilidad', 'riesgo_categoria', 'incendios_historico', 'area_historica'] if col in risk_map_sorted.columns]
+                    
                     st.dataframe(
-                        risk_map_sorted[['comuna', 'riesgo_probabilidad', 'riesgo_categoria', 'incendios_historico', 'area_historica']].head(20),
+                        risk_map_sorted[columnas_display].head(20),
                         width='stretch'
                     )
                     
