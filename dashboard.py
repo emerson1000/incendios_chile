@@ -21,6 +21,80 @@ import sys
 # Agregar src al path
 sys.path.append(str(Path(__file__).parent))
 
+# Función para normalizar regiones a formato estándar
+def normalizar_region(region_str):
+    """Normaliza nombres de regiones a formato estándar (I, II, III, ..., XVI, RM)"""
+    if pd.isna(region_str) or region_str == '':
+        return 'Sin Región'
+    
+    region_str = str(region_str).strip().upper()
+    
+    # Mapeo de números a romanos
+    numero_a_romano = {
+        '1': 'I', '2': 'II', '3': 'III', '4': 'IV', '5': 'V',
+        '6': 'VI', '7': 'VII', '8': 'VIII', '9': 'IX', '10': 'X',
+        '11': 'XI', '12': 'XII', '13': 'XIII', '14': 'XIV', '15': 'XV', '16': 'XVI'
+    }
+    
+    # Mapeo de variantes comunes
+    variantes = {
+        'RM': 'RM', 'REGION METROPOLITANA': 'RM', 'METROPOLITANA': 'RM',
+        'METROPOLITANA DE SANTIAGO': 'RM', 'SANTIAGO': 'RM',
+        'I': 'I', 'PRIMERA': 'I', 'TARAPACA': 'I', 'TARAPACÁ': 'I',
+        'II': 'II', 'SEGUNDA': 'II', 'ANTOFAGASTA': 'II',
+        'III': 'III', 'TERCERA': 'III', 'ATACAMA': 'III',
+        'IV': 'IV', 'CUARTA': 'IV', 'COQUIMBO': 'IV',
+        'V': 'V', 'QUINTA': 'V', 'VALPARAISO': 'V', 'VALPARAÍSO': 'V',
+        'VI': 'VI', 'SEXTA': 'VI', "O'HIGGINS": 'VI', 'OHIGGINS': 'VI',
+        'VII': 'VII', 'SEPTIMA': 'VII', 'SEPTIMA': 'VII', 'MAULE': 'VII',
+        'VIII': 'VIII', 'OCTAVA': 'VIII', 'BIOBIO': 'VIII', 'BÍOBÍO': 'VIII', 'BIO BIO': 'VIII',
+        'IX': 'IX', 'NOVENA': 'IX', 'ARAUCANIA': 'IX', 'ARAUCANÍA': 'IX',
+        'X': 'X', 'DECIMA': 'X', 'DÉCIMA': 'X', 'LOS LAGOS': 'X',
+        'XI': 'XI', 'DECIMA PRIMERA': 'XI', 'DÉCIMA PRIMERA': 'XI', 'AYSEN': 'XI', 'AYSÉN': 'XI',
+        'XII': 'XII', 'DECIMA SEGUNDA': 'XII', 'DÉCIMA SEGUNDA': 'XII', 'MAGALLANES': 'XII',
+        'XIV': 'XIV', 'DECIMA CUARTA': 'XIV', 'DÉCIMA CUARTA': 'XIV', 'LOS RIOS': 'XIV', 'LOS RÍOS': 'XIV',
+        'XV': 'XV', 'DECIMA QUINTA': 'XV', 'DÉCIMA QUINTA': 'XV', 'ARICA Y PARINACOTA': 'XV',
+        'XVI': 'XVI', 'DECIMA SEXTA': 'XVI', 'DÉCIMA SEXTA': 'XVI', 'ÑUBLE': 'XVI'
+    }
+    
+    # Buscar variantes exactas primero
+    if region_str in variantes:
+        return variantes[region_str]
+    
+    # Buscar si contiene "REGION" o "REGIÓN" seguido de número
+    if 'REGION' in region_str or 'REGIÓN' in region_str:
+        # Extraer número o romano
+        numeros = re.findall(r'\d+', region_str)
+        if numeros:
+            num = numeros[0]
+            if num in numero_a_romano:
+                return numero_a_romano[num]
+        
+        # Buscar números romanos
+        for romano in ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI']:
+            if romano in region_str:
+                return romano
+        
+        # Buscar RM
+        if 'METROPOLITANA' in region_str or 'SANTIAGO' in region_str:
+            return 'RM'
+    
+    # Si es solo un número, convertir a romano
+    if region_str.isdigit():
+        if region_str in numero_a_romano:
+            return numero_a_romano[region_str]
+    
+    # Si ya es un romano válido, devolverlo
+    if region_str in ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII', 'IX', 'X', 'XI', 'XII', 'XIII', 'XIV', 'XV', 'XVI', 'RM']:
+        return region_str
+    
+    # Si contiene valores inválidos
+    if region_str in ['NAN', 'NONE', 'SIN REGIÓN', 'SIN REGION', 'SIN REGIóN', '']:
+        return 'Sin Región'
+    
+    # Si no se puede normalizar, devolver el original (puede ayudar a debug)
+    return region_str
+
 try:
     from src.models.prediction import FireRiskPredictor
     from src.optimization.resource_allocation import ResourceAllocationOptimizer
@@ -65,19 +139,8 @@ def load_conaf_data():
             df['anio'] = df['anio'].astype(int)
             # Limpiar comunas
             df['comuna'] = df['comuna'].astype(str).str.strip().str.title()
-            # Limpiar regiones - proceso robusto
-            # Convertir a string primero para manejar NaN
-            df['region'] = df['region'].astype(str)
-            # Reemplazar valores NaN de pandas (aparecen como 'nan' en string)
-            df['region'] = df['region'].replace(['nan', 'NaN', 'NAN', 'None', 'NONE', ''], 'Sin Región')
-            # Limpiar espacios
-            df['region'] = df['region'].str.strip()
-            # Convertir a mayúsculas para normalizar
-            df['region'] = df['region'].str.upper()
-            # Reemplazar cualquier variante de 'Sin Región' o valores inválidos
-            df.loc[df['region'].isin(['NAN', 'SIN REGIÓN', 'SIN REGION', 'SIN REGIóN', '']), 'region'] = 'Sin Región'
-            # Finalmente, usar fillna por si acaso
-            df['region'] = df['region'].fillna('Sin Región')
+            # Normalizar regiones usando función robusta
+            df['region'] = df['region'].apply(normalizar_region)
             return df
         except Exception as e:
             st.error(f"Error al cargar datos: {e}")
@@ -266,50 +329,30 @@ st.sidebar.subheader("🗺️ Filtro de Regiones")
 # Manejar caso cuando no hay datos
 if len(df_base) > 0 and 'region' in df_base.columns:
     # Obtener todas las regiones únicas, excluyendo 'Sin Región' y valores inválidos
-    # IMPORTANTE: No normalizar aquí, usar los valores originales del dataframe
     regiones_unicas = df_base['region'].dropna().unique()
-    # Filtrar valores inválidos (normalizar solo para comparación)
     regiones_unicas = [
         r for r in regiones_unicas 
         if pd.notna(r) 
         and str(r).strip() != '' 
-        and str(r).strip().upper() not in ['SIN REGIÓN', 'SIN REGION', 'SIN REGIóN', 'NAN', 'NONE']
+        and str(r) != 'Sin Región'
     ]
     
-    # Función para ordenar regiones de forma inteligente (numérica si tienen números)
+    # Función para ordenar regiones de forma inteligente
     def ordenar_region(region):
-        region_str = str(region).upper()
-        # Buscar números romanos o arábigos en el nombre de la región
-        # Mapeo de números romanos comunes
+        region_str = str(region)
+        # Mapeo de números romanos
         romanos = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 
                   'VII': 7, 'VIII': 8, 'IX': 9, 'X': 10, 'XI': 11, 'XII': 12,
-                  'XIII': 13, 'XIV': 14, 'XV': 15, 'XVI': 16}
+                  'XIII': 13, 'XIV': 14, 'XV': 15, 'XVI': 16, 'RM': 17}
         
-        # Buscar números arábigos primero
-        numeros_arabigos = re.findall(r'\d+', region_str)
-        if numeros_arabigos:
-            return (0, int(numeros_arabigos[0]))
+        if region_str in romanos:
+            return (0, romanos[region_str])
         
-        # Buscar números romanos
-        for romano, valor in romanos.items():
-            if romano in region_str:
-                return (0, valor)
-        
-        # Si no tiene números, ordenar alfabéticamente
+        # Si no es una región conocida, poner al final
         return (1, region_str)
     
     # Ordenar regiones
     regiones_disponibles = sorted(regiones_unicas, key=ordenar_region)
-    
-    # Debug: mostrar información sobre regiones disponibles
-    with st.sidebar.expander("🔍 Debug: Regiones disponibles", expanded=False):
-        st.write(f"**Total regiones encontradas:** {len(regiones_disponibles)}")
-        st.write("**Regiones:**")
-        for i, reg in enumerate(regiones_disponibles[:20], 1):
-            count = len(df_base[df_base['region'] == reg])
-            st.write(f"{i}. {reg} ({count:,} registros)")
-        if len(regiones_disponibles) > 20:
-            st.write(f"... y {len(regiones_disponibles) - 20} más")
 else:
     regiones_disponibles = []
 
@@ -327,9 +370,11 @@ st.sidebar.subheader("🏘️ Filtro de Comunas")
 if len(df_base) > 0 and 'comuna' in df_base.columns:
     # Si hay regiones seleccionadas, filtrar comunas por esas regiones
     if len(regiones_seleccionadas) > 0:
-        # IMPORTANTE: Comparar directamente con los valores del dataframe (ya están normalizados)
-        # Las regiones seleccionadas deben coincidir exactamente con los valores en df_base['region']
-        df_filtrado_region = df_base[df_base['region'].isin(regiones_seleccionadas)]
+        # Normalizar las regiones seleccionadas para comparar con el dataframe
+        regiones_seleccionadas_normalizadas = [normalizar_region(r) for r in regiones_seleccionadas]
+        
+        # Filtrar comunas que pertenecen a las regiones seleccionadas
+        df_filtrado_region = df_base[df_base['region'].isin(regiones_seleccionadas_normalizadas)]
         
         # Obtener comunas únicas del dataframe filtrado
         comunas_unicas = df_filtrado_region['comuna'].dropna().unique()
@@ -339,23 +384,6 @@ if len(df_base) > 0 and 'comuna' in df_base.columns:
             and str(c).strip() != ''
             and str(c).strip().upper() not in ['NAN', 'NONE', 'CORPORACION', 'NACIONAL', 'FORESTAL']
         ])
-        
-        # Debug: mostrar información sobre comunas disponibles
-        with st.sidebar.expander("🔍 Debug: Comunas disponibles", expanded=False):
-            st.write(f"**Regiones seleccionadas:** {', '.join(regiones_seleccionadas)}")
-            st.write(f"**Total comunas encontradas:** {len(comunas_disponibles)}")
-            st.write(f"**Registros en regiones seleccionadas:** {len(df_filtrado_region):,}")
-            if len(comunas_disponibles) > 0:
-                st.write("**Primeras 10 comunas:**")
-                for i, com in enumerate(comunas_disponibles[:10], 1):
-                    count = len(df_filtrado_region[df_filtrado_region['comuna'] == com])
-                    st.write(f"{i}. {com} ({count:,} registros)")
-            else:
-                st.warning("⚠️ No se encontraron comunas para las regiones seleccionadas")
-                # Debug adicional: ver qué regiones hay realmente en los datos
-                st.write("**Debug adicional:**")
-                st.write(f"Regiones en df_base: {df_base['region'].unique()[:10]}")
-                st.write(f"Regiones seleccionadas: {regiones_seleccionadas}")
     else:
         # Si no hay regiones seleccionadas, mostrar todas las comunas
         comunas_unicas = df_base['comuna'].dropna().unique()
@@ -385,8 +413,9 @@ try:
     
     # Filtrar por regiones seleccionadas (si hay alguna seleccionada)
     if len(regiones_seleccionadas) > 0:
-        # Comparar directamente - las regiones en df_base ya están normalizadas a mayúsculas
-        df_filtrado = df_filtrado[df_filtrado['region'].isin(regiones_seleccionadas)]
+        # Normalizar las regiones seleccionadas para comparar con el dataframe
+        regiones_seleccionadas_normalizadas = [normalizar_region(r) for r in regiones_seleccionadas]
+        df_filtrado = df_filtrado[df_filtrado['region'].isin(regiones_seleccionadas_normalizadas)]
     
     # Filtrar por comunas seleccionadas (si hay alguna seleccionada)
     if len(comunas_seleccionadas) > 0:
