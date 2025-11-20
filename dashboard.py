@@ -635,25 +635,25 @@ with tab2:
                         with col_m1:
                             accuracy_val = float(metrics.get('accuracy', 0))
                             st.markdown(f"**Accuracy:**")
-                            st.markdown(f"### {accuracy_val:.6f}")
+                            st.markdown(f"### {accuracy_val:.3f}")
                             st.caption("Porcentaje de predicciones correctas")
                         
                         with col_m2:
                             f1_val = float(metrics.get('f1', 0))
                             st.markdown(f"**F1-Score:**")
-                            st.markdown(f"### {f1_val:.6f}")
+                            st.markdown(f"### {f1_val:.3f}")
                             st.caption("Balance entre precisión y recall")
                         
                         with col_m3:
                             precision_val = float(metrics.get('precision', 0))
                             st.markdown(f"**Precision:**")
-                            st.markdown(f"### {precision_val:.6f}")
+                            st.markdown(f"### {precision_val:.3f}")
                             st.caption("Verdaderos positivos / (Verdaderos + Falsos positivos)")
                         
                         with col_m4:
                             recall_val = float(metrics.get('recall', 0))
                             st.markdown(f"**Recall:**")
-                            st.markdown(f"### {recall_val:.6f}")
+                            st.markdown(f"### {recall_val:.3f}")
                             st.caption("Verdaderos positivos / (Verdaderos positivos + Falsos negativos)")
                         
                         # ROC-AUC en una fila separada si existe
@@ -662,7 +662,7 @@ with tab2:
                             col_roc1, col_roc2 = st.columns([1, 3])
                             with col_roc1:
                                 st.markdown(f"**ROC-AUC:**")
-                                st.markdown(f"### {roc_auc_val:.6f}")
+                                st.markdown(f"### {roc_auc_val:.3f}")
                                 st.caption("Área bajo la curva ROC (0.5 = aleatorio, 1.0 = perfecto)")
                         
                         # Feature importance
