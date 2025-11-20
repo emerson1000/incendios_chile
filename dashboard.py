@@ -1252,6 +1252,55 @@ with tab2:
                                             st.warning(f"⚠️ **Advertencia:** Faltan {len(missing_features)} features. Se rellenarán con 0.")
                                             with st.expander("Ver features faltantes"):
                                                 st.write(list(missing_features)[:20])  # Mostrar las primeras 20
+                                        
+                                        # Realizar predicciones
+                                        try:
+                                            # Mostrar estadísticas de las predicciones
+                                            if task_type_pred == 'classification':
+                                                riesgos = st.session_state.predictor.predict(X_pred, return_proba=True)
+                                            else:
+                                                predicciones = st.session_state.predictor.predict(X_pred)
+                                                riesgos = (predicciones - predicciones.min()) / (predicciones.max() - predicciones.min() + 1e-10)
+                                            
+                                            # Mostrar estadísticas detalladas de las predicciones
+                                            st.info(f"📈 Estadísticas de predicción del modelo **{model_type_usado.upper()}**: "
+                                                   f"Min={riesgos.min():.4f}, "
+                                                   f"Max={riesgos.max():.4f}, "
+                                                   f"Mean={riesgos.mean():.4f}, "
+                                                   f"Std={riesgos.std():.4f}, "
+                                                   f"Median={np.median(riesgos):.4f}")
+                                            
+                                            # Mostrar información de debug para verificar que el modelo es diferente
+                                            if hasattr(st.session_state.predictor.model, 'n_estimators'):
+                                                n_estimators = st.session_state.predictor.model.n_estimators
+                                                st.info(f"🔍 Debug: Modelo {model_type_usado} con {n_estimators} estimadores")
+                                            
+                                            # Verificar que hay variabilidad en las predicciones
+                                            if riesgos.std() < 0.001:
+                                                st.warning("⚠️ **Advertencia:** Las predicciones tienen muy poca variabilidad (std < 0.001). "
+                                                          "Esto podría indicar que el modelo está prediciendo valores muy similares para todas las comunas. "
+                                                          "Esto es normal si las features históricas son muy similares entre comunas o si el modelo tiene un sesgo fuerte.")
+                                            
+                                            risk_map = pd.DataFrame({
+                                                'comuna': comunas_unicas,
+                                                'riesgo_probabilidad': riesgos,
+                                                'incendios_historico': historico_comuna['incendios_total_hist'].values,
+                                                'area_historica': historico_comuna['area_total_hist'].values
+                                            })
+                                            
+                                            # Guardar también el tipo de modelo usado para esta predicción
+                                            risk_map['modelo_usado'] = model_type_usado
+                                            risk_map['task_type'] = task_type_usado
+                                            
+                                            st.session_state.risk_map = risk_map
+                                            st.success(f"✅ Mapa de riesgo generado usando modelo {model_type_usado.upper()}")
+                                        
+                                        except Exception as pred_error:
+                                            st.error(f"❌ Error al realizar predicciones: {str(pred_error)}")
+                                            import traceback
+                                            with st.expander("🔍 Detalles del error"):
+                                                st.code(traceback.format_exc())
+                            
                             except Exception as e:
                                 error_msg = str(e)
                                 if "number of features" in error_msg.lower() or "shape" in error_msg.lower():
@@ -1273,47 +1322,10 @@ with tab2:
                                             st.write(f"Features esperadas: {len(st.session_state.predictor.feature_names)}")
                                             st.write(f"Primeras 20 features esperadas: {st.session_state.predictor.feature_names[:20]}")
                                 else:
-                                    raise
-                                
-                                # Mostrar estadísticas de las predicciones
-                                if task_type_pred == 'classification':
-                                    riesgos = st.session_state.predictor.predict(X_pred, return_proba=True)
-                                else:
-                                    predicciones = st.session_state.predictor.predict(X_pred)
-                                    riesgos = (predicciones - predicciones.min()) / (predicciones.max() - predicciones.min() + 1e-10)
-                                
-                                # Mostrar estadísticas detalladas de las predicciones
-                                st.info(f"📈 Estadísticas de predicción del modelo **{model_type_usado.upper()}**: "
-                                       f"Min={riesgos.min():.4f}, "
-                                       f"Max={riesgos.max():.4f}, "
-                                       f"Mean={riesgos.mean():.4f}, "
-                                       f"Std={riesgos.std():.4f}, "
-                                       f"Median={np.median(riesgos):.4f}")
-                                
-                                # Mostrar información de debug para verificar que el modelo es diferente
-                                if hasattr(st.session_state.predictor.model, 'n_estimators'):
-                                    n_estimators = st.session_state.predictor.model.n_estimators
-                                    st.info(f"🔍 Debug: Modelo {model_type_usado} con {n_estimators} estimadores")
-                                
-                                # Verificar que hay variabilidad en las predicciones
-                                if riesgos.std() < 0.001:
-                                    st.warning("⚠️ **Advertencia:** Las predicciones tienen muy poca variabilidad (std < 0.001). "
-                                              "Esto podría indicar que el modelo está prediciendo valores muy similares para todas las comunas. "
-                                              "Esto es normal si las features históricas son muy similares entre comunas o si el modelo tiene un sesgo fuerte.")
-                                
-                                risk_map = pd.DataFrame({
-                                    'comuna': comunas_unicas,
-                                    'riesgo_probabilidad': riesgos,
-                                    'incendios_historico': historico_comuna['incendios_total'].values,
-                                    'area_historica': historico_comuna['area_total'].values
-                                })
-                                
-                                # Guardar también el tipo de modelo usado para esta predicción
-                                risk_map['modelo_usado'] = model_type_usado
-                                risk_map['task_type'] = task_type_usado
-                                
-                                st.session_state.risk_map = risk_map
-                                st.success(f"✅ Mapa de riesgo generado usando modelo {model_type_usado.upper()}")
+                                    st.error(f"❌ Error al preparar features: {error_msg}")
+                                    import traceback
+                                    with st.expander("🔍 Detalles del error"):
+                                        st.code(traceback.format_exc())
                         
                     except Exception as e:
                         st.error(f"Error al generar mapa de riesgo: {str(e)}")
