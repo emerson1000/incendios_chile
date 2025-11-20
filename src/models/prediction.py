@@ -204,12 +204,58 @@ class FireRiskPredictor:
         
         logger.info(f"Train: {len(X_train)} muestras, Val: {len(X_val)} muestras")
         
-        # Entrenar modelo
-        self.model.fit(
-            X_train, y_train,
-            eval_set=[(X_val, y_val)] if self.model_type in ['xgboost', 'lightgbm'] else None,
-            verbose=False if self.model_type in ['xgboost', 'lightgbm'] else True
-        )
+        # Validaciones para clasificación
+        if self.task == "classification":
+            unique_classes_train = sorted(y_train.unique())
+            unique_classes_val = sorted(y_val.unique())
+            train_dist = y_train.value_counts().to_dict()
+            val_dist = y_val.value_counts().to_dict()
+            
+            logger.info(f"Clases en entrenamiento: {unique_classes_train} (distribución: {train_dist})")
+            logger.info(f"Clases en validación: {unique_classes_val} (distribución: {val_dist})")
+            
+            # Verificar que haya al menos 2 clases en entrenamiento
+            if len(unique_classes_train) < 2:
+                error_msg = (
+                    f"❌ Error: No hay suficientes clases para clasificación.\n\n"
+                    f"   • Solo se encontró la clase {unique_classes_train[0]}\n"
+                    f"   • Distribución en entrenamiento: {train_dist}\n"
+                    f"   • Se necesita al menos una muestra de clase 0 (sin incendio) y clase 1 (con incendio)\n\n"
+                    f"   Solución: Ajusta los filtros para incluir:\n"
+                    f"   • Más años de datos\n"
+                    f"   • Más comunas\n"
+                    f"   • Esto asegurará que haya comunas sin incendios en algunos años"
+                )
+                logger.error(error_msg)
+                raise ValueError(error_msg)
+        
+        # Entrenar modelo con manejo de errores robusto
+        try:
+            self.model.fit(
+                X_train, y_train,
+                eval_set=[(X_val, y_val)] if self.model_type in ['xgboost', 'lightgbm'] else None,
+                verbose=False if self.model_type in ['xgboost', 'lightgbm'] else True
+            )
+        except ValueError as e:
+            error_msg = str(e)
+            if "classes" in error_msg.lower() or "class" in error_msg.lower():
+                unique_train = sorted(y_train.unique())
+                unique_val = sorted(y_val.unique())
+                train_dist = y_train.value_counts().to_dict()
+                val_dist = y_val.value_counts().to_dict()
+                
+                enhanced_error = (
+                    f"❌ Error al entrenar modelo de clasificación:\n\n"
+                    f"   • Clases en entrenamiento: {unique_train} (distribución: {train_dist})\n"
+                    f"   • Clases en validación: {unique_val} (distribución: {val_dist})\n"
+                    f"   • Error original: {error_msg}\n\n"
+                    f"   Problema: Todos los datos tienen la misma clase.\n\n"
+                    f"   Solución: Ajusta los filtros para incluir más datos y asegurar que haya\n"
+                    f"   tanto comunas con incendios (clase 1) como sin incendios (clase 0)."
+                )
+                logger.error(enhanced_error)
+                raise ValueError(enhanced_error) from e
+            raise
         
         # Predecir en validación
         if self.task == "classification":

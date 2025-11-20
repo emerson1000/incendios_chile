@@ -557,10 +557,36 @@ with tab2:
                 with st.spinner("Entrenando modelo con datos reales..."):
                     try:
                         # Preparar datos para ML
-                        panel_df = df_filtrado.groupby(['comuna', 'anio']).agg({
+                        # IMPORTANTE: Crear panel completo incluyendo comunas sin incendios
+                        # para tener ambas clases (0 = sin incendio, 1 = con incendio)
+                        
+                        # Obtener todas las combinaciones posibles de comuna-año
+                        todas_comunas = df_filtrado['comuna'].unique()
+                        todos_anios = sorted(df_filtrado['anio'].unique())
+                        
+                        # Crear panel completo con todas las combinaciones
+                        from itertools import product
+                        panel_completo = pd.DataFrame(
+                            list(product(todas_comunas, todos_anios)),
+                            columns=['comuna', 'anio']
+                        )
+                        
+                        # Agregar datos reales
+                        panel_agregado = df_filtrado.groupby(['comuna', 'anio']).agg({
                             'num_incendios': 'sum',
                             'area_quemada_ha': 'sum'
                         }).reset_index()
+                        
+                        # Merge: los que no tienen datos tendrán NaN en num_incendios
+                        panel_df = panel_completo.merge(
+                            panel_agregado,
+                            on=['comuna', 'anio'],
+                            how='left'
+                        )
+                        
+                        # Llenar NaN con 0 (comunas sin incendios en ese año)
+                        panel_df['num_incendios'] = panel_df['num_incendios'].fillna(0)
+                        panel_df['area_quemada_ha'] = panel_df['area_quemada_ha'].fillna(0)
                         
                         # Preparar datos para ML
                         # Agregar features básicas temporales primero
