@@ -633,31 +633,37 @@ with tab2:
                         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                         
                         with col_m1:
-                            accuracy_val = metrics.get('accuracy', 0)
-                            st.metric("Accuracy", f"{accuracy_val:.4f}")
+                            accuracy_val = float(metrics.get('accuracy', 0))
+                            # Mostrar valor completo sin truncar
+                            accuracy_str = f"{accuracy_val:.6f}"
+                            st.metric("Accuracy", accuracy_str)
                             st.caption("Porcentaje de predicciones correctas")
                         
                         with col_m2:
-                            f1_val = metrics.get('f1', 0)
-                            st.metric("F1-Score", f"{f1_val:.4f}")
+                            f1_val = float(metrics.get('f1', 0))
+                            f1_str = f"{f1_val:.6f}"
+                            st.metric("F1-Score", f1_str)
                             st.caption("Balance entre precisión y recall")
                         
                         with col_m3:
-                            precision_val = metrics.get('precision', 0)
-                            st.metric("Precision", f"{precision_val:.4f}")
+                            precision_val = float(metrics.get('precision', 0))
+                            precision_str = f"{precision_val:.6f}"
+                            st.metric("Precision", precision_str)
                             st.caption("Verdaderos positivos / (Verdaderos + Falsos positivos)")
                         
                         with col_m4:
-                            recall_val = metrics.get('recall', 0)
-                            st.metric("Recall", f"{recall_val:.4f}")
+                            recall_val = float(metrics.get('recall', 0))
+                            recall_str = f"{recall_val:.6f}"
+                            st.metric("Recall", recall_str)
                             st.caption("Verdaderos positivos / (Verdaderos positivos + Falsos negativos)")
                         
                         # ROC-AUC en una fila separada si existe
                         if metrics.get('roc_auc') is not None:
-                            roc_auc_val = metrics.get('roc_auc', 0)
+                            roc_auc_val = float(metrics.get('roc_auc', 0))
+                            roc_auc_str = f"{roc_auc_val:.6f}"
                             col_roc1, col_roc2 = st.columns([1, 3])
                             with col_roc1:
-                                st.metric("ROC-AUC", f"{roc_auc_val:.4f}")
+                                st.metric("ROC-AUC", roc_auc_str)
                                 st.caption("Área bajo la curva ROC (0.5 = aleatorio, 1.0 = perfecto)")
                         
                         # Feature importance
