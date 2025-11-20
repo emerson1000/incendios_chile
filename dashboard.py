@@ -21,6 +21,139 @@ import sys
 # Agregar src al path
 sys.path.append(str(Path(__file__).parent))
 
+# Mapeo completo de comunas a regiones (basado en división administrativa oficial de Chile)
+MAPEO_COMUNA_REGION = {
+    # XV de Arica y Parinacota
+    'Arica': 'XV', 'Camarones': 'XV', 'Putre': 'XV', 'General Lagos': 'XV',
+    # I de Tarapacá
+    'Alto Hospicio': 'I', 'Iquique': 'I', 'Huara': 'I', 'Camiña': 'I', 'Colchane': 'I', 
+    'Pica': 'I', 'Pozo Almonte': 'I',
+    # II de Antofagasta
+    'Tocopilla': 'II', 'María Elena': 'II', 'Calama': 'II', 'Ollagüe': 'II', 
+    'San Pedro de Atacama': 'II', 'Antofagasta': 'II', 'Mejillones': 'II', 
+    'Sierra Gorda': 'II', 'Taltal': 'II',
+    # III de Atacama
+    'Chañaral': 'III', 'Diego de Almagro': 'III', 'Copiapó': 'III', 'Caldera': 'III', 
+    'Tierra Amarilla': 'III', 'Vallenar': 'III', 'Freirina': 'III', 'Huasco': 'III', 
+    'Alto del Carmen': 'III',
+    # IV de Coquimbo
+    'La Serena': 'IV', 'La Higuera': 'IV', 'Coquimbo': 'IV', 'Andacollo': 'IV', 
+    'Vicuña': 'IV', 'Paihuano': 'IV', 'Ovalle': 'IV', 'Río Hurtado': 'IV', 
+    'Monte Patria': 'IV', 'Combarbalá': 'IV', 'Punitaqui': 'IV', 'Illapel': 'IV', 
+    'Salamanca': 'IV', 'Los Vilos': 'IV', 'Canela': 'IV',
+    # V de Valparaíso
+    'La Ligua': 'V', 'Petorca': 'V', 'Cabildo': 'V', 'Zapallar': 'V', 'Papudo': 'V', 
+    'Los Andes': 'V', 'San Esteban': 'V', 'Calle Larga': 'V', 'Rinconada': 'V', 
+    'San Felipe': 'V', 'Putaendo': 'V', 'Santa María': 'V', 'Panquehue': 'V', 
+    'Llaillay': 'V', 'Catemu': 'V', 'Quillota': 'V', 'La Cruz': 'V', 'Calera': 'V', 
+    'Nogales': 'V', 'Hijuelas': 'V', 'Limache': 'V', 'Olmué': 'V', 'Valparaíso': 'V', 
+    'Viña del Mar': 'V', 'Quintero': 'V', 'Puchuncaví': 'V', 'Quilpué': 'V', 
+    'Villa Alemana': 'V', 'Casablanca': 'V', 'Concón': 'V', 'Juan Fernández': 'V', 
+    'San Antonio': 'V', 'Cartagena': 'V', 'El Tabo': 'V', 'El Quisco': 'V', 
+    'Algarrobo': 'V', 'Santo Domingo': 'V', 'Isla de Pascua': 'V',
+    # VI del Libertador General Bernardo O'Higgins
+    'Rancagua': 'VI', 'Graneros': 'VI', 'Mostazal': 'VI', 'Codegua': 'VI', 
+    'Machalí': 'VI', 'Olivar': 'VI', 'Requinoa': 'VI', 'Rengo': 'VI', 'Malloa': 'VI', 
+    'Quinta de Tilcoco': 'VI', 'San Vicente': 'VI', 'Pichidegua': 'VI', 'Peumo': 'VI', 
+    'Coltauco': 'VI', 'Coinco': 'VI', 'Doñihue': 'VI', 'Las Cabras': 'VI', 
+    'San Fernando': 'VI', 'Chimbarongo': 'VI', 'Placilla': 'VI', 'Nancagua': 'VI', 
+    'Chépica': 'VI', 'Santa Cruz': 'VI', 'Lolol': 'VI', 'Pumanque': 'VI', 
+    'Palmilla': 'VI', 'Peralillo': 'VI', 'Pichilemu': 'VI', 'Navidad': 'VI', 
+    'Litueche': 'VI', 'La Estrella': 'VI', 'Marchihue': 'VI', 'Paredones': 'VI',
+    # VII del Maule
+    'Curicó': 'VII', 'Teno': 'VII', 'Romeral': 'VII', 'Molina': 'VII', 
+    'Sagrada Familia': 'VII', 'Hualañé': 'VII', 'Licantén': 'VII', 'Vichuquén': 'VII', 
+    'Rauco': 'VII', 'Talca': 'VII', 'Pelarco': 'VII', 'Río Claro': 'VII', 
+    'San Clemente': 'VII', 'Maule': 'VII', 'San Rafael': 'VII', 'Empedrado': 'VII', 
+    'Pencahue': 'VII', 'Constitución': 'VII', 'Curepto': 'VII', 'Linares': 'VII', 
+    'Yerbas Buenas': 'VII', 'Colbún': 'VII', 'Longaví': 'VII', 'Parral': 'VII', 
+    'Retiro': 'VII', 'Villa Alegre': 'VII', 'San Javier': 'VII', 'Cauquenes': 'VII', 
+    'Pelluhue': 'VII', 'Chanco': 'VII',
+    # VIII del Biobío
+    'Chillán': 'VIII', 'San Carlos': 'VIII', 'Ñiquén': 'VIII', 'San Fabián': 'VIII', 
+    'Coihueco': 'VIII', 'Pinto': 'VIII', 'San Ignacio': 'VIII', 'El Carmen': 'VIII', 
+    'Yungay': 'VIII', 'Pemuco': 'VIII', 'Bulnes': 'VIII', 'Quillón': 'VIII', 
+    'Ránquil': 'VIII', 'Portezuelo': 'VIII', 'Coelemu': 'VIII', 'Treguaco': 'VIII', 
+    'Cobquecura': 'VIII', 'Quirihue': 'VIII', 'Ninhue': 'VIII', 'San Nicolás': 'VIII', 
+    'Chillán Viejo': 'VIII', 'Alto Biobío': 'VIII', 'Los Angeles': 'VIII', 
+    'Los Ángeles': 'VIII', 'Cabrero': 'VIII', 'Tucapel': 'VIII', 'Antuco': 'VIII', 
+    'Quilleco': 'VIII', 'Santa Bárbara': 'VIII', 'Quilaco': 'VIII', 'Mulchén': 'VIII', 
+    'Negrete': 'VIII', 'Nacimiento': 'VIII', 'Laja': 'VIII', 'San Rosendo': 'VIII', 
+    'Yumbel': 'VIII', 'Concepción': 'VIII', 'Talcahuano': 'VIII', 'Penco': 'VIII', 
+    'Tomé': 'VIII', 'Florida': 'VIII', 'Hualpén': 'VIII', 'Hualqui': 'VIII', 
+    'Santa Juana': 'VIII', 'Lota': 'VIII', 'Coronel': 'VIII', 'San Pedro de la Paz': 'VIII', 
+    'Chiguayante': 'VIII', 'Lebu': 'VIII', 'Arauco': 'VIII', 'Curanilahue': 'VIII', 
+    'Los Alamos': 'VIII', 'Los Álamos': 'VIII', 'Cañete': 'VIII', 'Contulmo': 'VIII', 
+    'Tirua': 'VIII', 'Tirúa': 'VIII',
+    # IX de la Araucanía
+    'Angol': 'IX', 'Renaico': 'IX', 'Collipulli': 'IX', 'Lonquimay': 'IX', 
+    'Curacautín': 'IX', 'Ercilla': 'IX', 'Victoria': 'IX', 'Traiguén': 'IX', 
+    'Lumaco': 'IX', 'Purén': 'IX', 'Los Sauces': 'IX', 'Temuco': 'IX', 
+    'Lautaro': 'IX', 'Perquenco': 'IX', 'Vilcún': 'IX', 'Cholchol': 'IX', 
+    'Cunco': 'IX', 'Melipeuco': 'IX', 'Curarrehue': 'IX', 'Pucón': 'IX', 
+    'Villarrica': 'IX', 'Freire': 'IX', 'Pitrufquén': 'IX', 'Gorbea': 'IX', 
+    'Loncoche': 'IX', 'Toltén': 'IX', 'Teodoro Schmidt': 'IX', 'Saavedra': 'IX', 
+    'Carahue': 'IX', 'Nueva Imperial': 'IX', 'Galvarino': 'IX', 'Padre las Casas': 'IX',
+    # XIV de los Ríos
+    'Valdivia': 'XIV', 'Mariquina': 'XIV', 'Lanco': 'XIV', 'Máfil': 'XIV', 
+    'Corral': 'XIV', 'Panguipulli': 'XIV', 'Paillaco': 'XIV', 'La Unión': 'XIV', 
+    'Futrono': 'XIV', 'Río Bueno': 'XIV', 'Lago Ranco': 'XIV',
+    # X de los Lagos
+    'Osorno': 'X', 'San Pablo': 'X', 'Puyehue': 'X', 'Puerto Octay': 'X', 
+    'Purranque': 'X', 'Río Negro': 'X', 'San Juan de la Costa': 'X', 
+    'Puerto Montt': 'X', 'Puerto Varas': 'X', 'Cochamó': 'X', 'Calbuco': 'X', 
+    'Maullín': 'X', 'Los Muermos': 'X', 'Fresia': 'X', 'Llanquihue': 'X', 
+    'Frutillar': 'X', 'Castro': 'X', 'Ancud': 'X', 'Quemchi': 'X', 'Dalcahue': 'X', 
+    'Curaco de Vélez': 'X', 'Quinchao': 'X', 'Puqueldón': 'X', 'Chonchi': 'X', 
+    'Queilén': 'X', 'Quellón': 'X', 'Chaitén': 'X', 'Hualaihué': 'X', 
+    'Futaleufú': 'X', 'Palena': 'X',
+    # XI Aysén del General Carlos Ibáñez del Campo
+    'Coyhaique': 'XI', 'Lago Verde': 'XI', 'Aysén': 'XI', 'Cisnes': 'XI', 
+    'Guaitecas': 'XI', 'Chile Chico': 'XI', 'Río Ibánez': 'XI', 'Cochrane': 'XI', 
+    "O'Higgins": 'XI', 'Tortel': 'XI',
+    # XII de Magallanes y Antártica Chilena
+    'Natales': 'XII', 'Torres del Paine': 'XII', 'Punta Arenas': 'XII', 
+    'Río Verde': 'XII', 'Laguna Blanca': 'XII', 'San Gregorio': 'XII', 
+    'Porvenir': 'XII', 'Primavera': 'XII', 'Timaukel': 'XII', 'Cabo de Hornos': 'XII', 
+    'Antártica': 'XII',
+    # Metropolitana de Santiago (RM)
+    'Santiago': 'RM', 'Independencia': 'RM', 'Conchalí': 'RM', 'Huechuraba': 'RM', 
+    'Recoleta': 'RM', 'Providencia': 'RM', 'Vitacura': 'RM', 'Lo Barnechea': 'RM', 
+    'Las Condes': 'RM', 'Ñuñoa': 'RM', 'La Reina': 'RM', 'Macul': 'RM', 
+    'Peñalolén': 'RM', 'La Florida': 'RM', 'San Joaquín': 'RM', 'La Granja': 'RM', 
+    'La Pintana': 'RM', 'San Ramón': 'RM', 'San Miguel': 'RM', 'La Cisterna': 'RM', 
+    'El Bosque': 'RM', 'Pedro Aguirre Cerda': 'RM', 'Lo Espejo': 'RM', 
+    'Estación Central': 'RM', 'Cerrillos': 'RM', 'Maipú': 'RM', 'Quinta Normal': 'RM', 
+    'Lo Prado': 'RM', 'Pudahuel': 'RM', 'Cerro Navia': 'RM', 'Renca': 'RM', 
+    'Quilicura': 'RM', 'Colina': 'RM', 'Lampa': 'RM', 'Tiltil': 'RM', 
+    'Puente Alto': 'RM', 'San José de Maipo': 'RM', 'Pirque': 'RM', 
+    'San Bernardo': 'RM', 'Buin': 'RM', 'Paine': 'RM', 'Calera de Tango': 'RM', 
+    'Melipilla': 'RM', 'María Pinto': 'RM', 'Curacaví': 'RM', 'Alhué': 'RM', 
+    'San Pedro': 'RM', 'Talagante': 'RM', 'Peñaflor': 'RM', 'Isla de Maipo': 'RM', 
+    'El Monte': 'RM', 'Padre Hurtado': 'RM'
+}
+
+# Función para obtener región de una comuna
+def obtener_region_por_comuna(comuna_str):
+    """Obtiene la región de una comuna usando el mapeo oficial"""
+    if pd.isna(comuna_str) or comuna_str == '':
+        return None
+    
+    comuna_normalizada = str(comuna_str).strip().title()
+    
+    # Buscar coincidencia exacta
+    if comuna_normalizada in MAPEO_COMUNA_REGION:
+        return MAPEO_COMUNA_REGION[comuna_normalizada]
+    
+    # Buscar coincidencia sin acentos y con variaciones comunes
+    comuna_sin_acentos = comuna_normalizada.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u').replace('ñ', 'n')
+    for comuna_key, region in MAPEO_COMUNA_REGION.items():
+        comuna_key_sin_acentos = comuna_key.replace('á', 'a').replace('é', 'e').replace('í', 'i').replace('ó', 'o').replace('ú', 'u').replace('ñ', 'n')
+        if comuna_sin_acentos.lower() == comuna_key_sin_acentos.lower():
+            return region
+    
+    return None
+
 # Función para normalizar regiones a formato estándar
 def normalizar_region(region_str):
     """Normaliza nombres de regiones a formato estándar (I, II, III, ..., XVI, RM)"""
@@ -139,8 +272,23 @@ def load_conaf_data():
             df['anio'] = df['anio'].astype(int)
             # Limpiar comunas
             df['comuna'] = df['comuna'].astype(str).str.strip().str.title()
+            
             # Normalizar regiones usando función robusta
             df['region'] = df['region'].apply(normalizar_region)
+            
+            # Completar regiones faltantes usando mapeo de comunas
+            # Identificar filas sin región o con 'Sin Región'
+            sin_region_mask = (df['region'].isna()) | (df['region'] == 'Sin Región') | (df['region'] == '')
+            
+            if sin_region_mask.any():
+                # Para cada comuna sin región, buscar en el mapeo
+                for idx in df[sin_region_mask].index:
+                    comuna = df.loc[idx, 'comuna']
+                    region_encontrada = obtener_region_por_comuna(comuna)
+                    if region_encontrada:
+                        # Normalizar la región encontrada
+                        df.loc[idx, 'region'] = normalizar_region(region_encontrada)
+            
             return df
         except Exception as e:
             st.error(f"Error al cargar datos: {e}")
