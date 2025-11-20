@@ -8,6 +8,7 @@ import numpy as np
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime
+import re
 try:
     import folium
     from streamlit_folium import folium_static
@@ -264,15 +265,32 @@ if ano_inicio > ano_fin:
 st.sidebar.subheader("🗺️ Filtro de Regiones")
 # Manejar caso cuando no hay datos
 if len(df_base) > 0 and 'region' in df_base.columns:
-    regiones_disponibles = sorted([r for r in df_base['region'].dropna().unique() if r != 'Sin Región' and pd.notna(r)])
-    regiones_disponibles.insert(0, 'Todas las Regiones')
+    # Obtener todas las regiones únicas, excluyendo 'Sin Región' y valores inválidos
+    regiones_unicas = df_base['region'].dropna().unique()
+    regiones_unicas = [r for r in regiones_unicas if r != 'Sin Región' and pd.notna(r) and str(r).strip() != '']
+    
+    # Función para ordenar regiones de forma inteligente (numérica si tienen números)
+    def ordenar_region(region):
+        region_str = str(region).upper()
+        # Buscar números en el nombre de la región
+        numeros = re.findall(r'\d+', region_str)
+        if numeros:
+            # Si tiene números, ordenar por el primer número encontrado
+            return (0, int(numeros[0]))
+        else:
+            # Si no tiene números, ordenar alfabéticamente
+            return (1, region_str)
+    
+    # Ordenar regiones
+    regiones_disponibles = sorted(regiones_unicas, key=ordenar_region)
 else:
-    regiones_disponibles = ['Todas las Regiones']
+    regiones_disponibles = []
 
-region_seleccionada = st.sidebar.selectbox(
-    "Seleccionar Región",
+# Permitir selección múltiple de regiones
+regiones_seleccionadas = st.sidebar.multiselect(
+    "Seleccionar Región(es)",
     regiones_disponibles,
-    index=0,
+    default=[],
     key="region_select"
 )
 
@@ -280,24 +298,30 @@ region_seleccionada = st.sidebar.selectbox(
 st.sidebar.subheader("🏘️ Filtro de Comunas")
 # Manejar caso cuando no hay datos
 if len(df_base) > 0 and 'comuna' in df_base.columns:
-    if region_seleccionada != 'Todas las Regiones':
-        df_filtrado_region = df_base[df_base['region'] == region_seleccionada]
-        comunas_disponibles = sorted([c for c in df_filtrado_region['comuna'].dropna().unique() if pd.notna(c)])
-        comunas_disponibles.insert(0, 'Todas las Comunas de la Región')
+    # Si hay regiones seleccionadas, filtrar comunas por esas regiones
+    if len(regiones_seleccionadas) > 0:
+        # Filtrar por las regiones seleccionadas (asegurar comparación correcta)
+        # Normalizar regiones en el dataframe para comparación
+        df_base_normalized = df_base.copy()
+        df_base_normalized['region_normalized'] = df_base_normalized['region'].astype(str).str.strip().str.upper()
+        regiones_seleccionadas_normalized = [str(r).strip().upper() for r in regiones_seleccionadas]
+        
+        # Filtrar comunas que pertenecen a las regiones seleccionadas
+        df_filtrado_region = df_base_normalized[
+            df_base_normalized['region_normalized'].isin(regiones_seleccionadas_normalized)
+        ]
+        comunas_disponibles = sorted([c for c in df_filtrado_region['comuna'].dropna().unique() if pd.notna(c) and str(c).strip() != ''])
     else:
-        comunas_disponibles = sorted([c for c in df_base['comuna'].dropna().unique() if pd.notna(c)])
-        comunas_disponibles.insert(0, 'Todas las Comunas')
+        # Si no hay regiones seleccionadas, mostrar todas las comunas
+        comunas_disponibles = sorted([c for c in df_base['comuna'].dropna().unique() if pd.notna(c) and str(c).strip() != ''])
 else:
-    comunas_disponibles = ['Todas las Comunas']
+    comunas_disponibles = []
 
-# Limitar comunas para no sobrecargar
-if len(comunas_disponibles) > 200:
-    comunas_disponibles = comunas_disponibles[:200]
-
-comuna_seleccionada = st.sidebar.selectbox(
-    "Seleccionar Comuna",
+# Permitir selección múltiple de comunas
+comunas_seleccionadas = st.sidebar.multiselect(
+    "Seleccionar Comuna(s)",
     comunas_disponibles,
-    index=0,
+    default=[],
     key="comuna_select"
 )
 
@@ -308,23 +332,36 @@ try:
         (df_base['anio'] <= ano_fin)
     ].copy()
     
-    if region_seleccionada != 'Todas las Regiones':
-        df_filtrado = df_filtrado[df_filtrado['region'] == region_seleccionada]
+    # Filtrar por regiones seleccionadas (si hay alguna seleccionada)
+    if len(regiones_seleccionadas) > 0:
+        # Normalizar para comparación
+        df_filtrado['region_normalized'] = df_filtrado['region'].astype(str).str.strip().str.upper()
+        regiones_seleccionadas_normalized = [str(r).strip().upper() for r in regiones_seleccionadas]
+        df_filtrado = df_filtrado[df_filtrado['region_normalized'].isin(regiones_seleccionadas_normalized)]
+        df_filtrado = df_filtrado.drop(columns=['region_normalized'])
     
-    if comuna_seleccionada != 'Todas las Comunas' and comuna_seleccionada != 'Todas las Comunas de la Región':
-        df_filtrado = df_filtrado[df_filtrado['comuna'] == comuna_seleccionada]
+    # Filtrar por comunas seleccionadas (si hay alguna seleccionada)
+    if len(comunas_seleccionadas) > 0:
+        df_filtrado = df_filtrado[df_filtrado['comuna'].isin(comunas_seleccionadas)]
 except Exception as e:
     st.sidebar.error(f"Error al aplicar filtros: {e}")
     df_filtrado = df_base.copy()
 
 # Mostrar info de filtros
 st.sidebar.markdown("---")
+region_info = ", ".join(regiones_seleccionadas[:2]) if len(regiones_seleccionadas) > 0 else "Todas"
+if len(regiones_seleccionadas) > 2:
+    region_info += f" (+{len(regiones_seleccionadas)-2} más)"
+comuna_info = ", ".join(comunas_seleccionadas[:2]) if len(comunas_seleccionadas) > 0 else "Todas"
+if len(comunas_seleccionadas) > 2:
+    comuna_info += f" (+{len(comunas_seleccionadas)-2} más)"
+
 st.sidebar.info(f"""
 **Datos Filtrados:**
 - Registros: {len(df_filtrado):,}
 - Años: {ano_inicio}-{ano_fin}
-- Región: {region_seleccionada[:20]}
-- Comuna: {(comuna_seleccionada[:20] + '...' if len(comuna_seleccionada) > 20 else comuna_seleccionada)}
+- Región(es): {region_info}
+- Comuna(s): {comuna_info}
 """)
 
 # Guardar datos filtrados en sesión
@@ -795,7 +832,11 @@ with tab3:
     if st.session_state.risk_map is None:
         st.warning("⚠️ Por favor genera un mapa de riesgo primero en la pestaña 'Predicción de Riesgo'")
     else:
-        st.info(f"🎯 Optimizando recursos para {region_seleccionada} ({comuna_seleccionada[:30]})")
+        region_str = ", ".join(regiones_seleccionadas) if len(regiones_seleccionadas) > 0 else "Todas las Regiones"
+        comuna_str = ", ".join(comunas_seleccionadas[:2]) if len(comunas_seleccionadas) > 0 else "Todas las Comunas"
+        if len(comunas_seleccionadas) > 2:
+            comuna_str += f" (+{len(comunas_seleccionadas)-2} más)"
+        st.info(f"🎯 Optimizando recursos para {region_str} ({comuna_str})")
         
         st.subheader("Configuración de Optimización")
         
@@ -973,7 +1014,7 @@ with tab4:
                 st.plotly_chart(fig_tendencia, width='stretch')
             
             with col2:
-                if region_seleccionada == 'Todas las Regiones':
+                if len(regiones_seleccionadas) == 0:
                     # Filtrar 'Sin Región' y valores inválidos antes de agrupar
                     # Normalizar a mayúsculas para comparación
                     df_region_clean = df_filtrado[
@@ -1011,12 +1052,15 @@ with tab4:
                     comunas_region = df_filtrado.groupby('comuna')['num_incendios'].sum().reset_index()
                     comunas_region = comunas_region.sort_values('num_incendios', ascending=False).head(10)
                     
+                    region_title = ", ".join(regiones_seleccionadas[:2]) if len(regiones_seleccionadas) > 0 else "Todas las Regiones"
+                    if len(regiones_seleccionadas) > 2:
+                        region_title += f" (+{len(regiones_seleccionadas)-2} más)"
                     fig_comuna = px.bar(
                         comunas_region,
                         x='num_incendios',
                         y='comuna',
                         orientation='h',
-                        title=f'Top 10 Comunas con Más Incendios ({region_seleccionada})',
+                        title=f'Top 10 Comunas con Más Incendios ({region_title})',
                         labels={'num_incendios': 'Número de Incendios'},
                         color='num_incendios',
                         color_continuous_scale='Oranges'
@@ -1048,7 +1092,7 @@ with tab4:
                 st.download_button(
                     label="📥 Descargar Datos Filtrados (CSV)",
                     data=csv,
-                    file_name=f"incendios_conaf_{ano_inicio}_{ano_fin}_{region_seleccionada[:10]}.csv",
+                    file_name=f"incendios_conaf_{ano_inicio}_{ano_fin}_{'_'.join(regiones_seleccionadas[:2]) if len(regiones_seleccionadas) > 0 else 'todas'}.csv",
                     mime="text/csv"
                 )
             except Exception as e:
