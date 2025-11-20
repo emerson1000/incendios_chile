@@ -624,6 +624,7 @@ with tab2:
                         # Guardar en sesión
                         st.session_state.predictor = predictor
                         st.session_state.panel_data = panel_df
+                        st.session_state.task_type = task_type  # Guardar tipo de tarea para predicción
                         
                         st.success("✅ Modelo entrenado exitosamente con datos reales")
                         
@@ -632,19 +633,32 @@ with tab2:
                         col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                         
                         with col_m1:
-                            st.metric("Accuracy", f"{metrics.get('accuracy', 0):.4f}")
+                            accuracy_val = metrics.get('accuracy', 0)
+                            st.metric("Accuracy", f"{accuracy_val:.4f}")
+                            st.caption("Porcentaje de predicciones correctas")
                         
                         with col_m2:
-                            st.metric("F1-Score", f"{metrics.get('f1', 0):.4f}")
+                            f1_val = metrics.get('f1', 0)
+                            st.metric("F1-Score", f"{f1_val:.4f}")
+                            st.caption("Balance entre precisión y recall")
                         
                         with col_m3:
-                            st.metric("Precision", f"{metrics.get('precision', 0):.4f}")
+                            precision_val = metrics.get('precision', 0)
+                            st.metric("Precision", f"{precision_val:.4f}")
+                            st.caption("Verdaderos positivos / (Verdaderos + Falsos positivos)")
                         
                         with col_m4:
-                            st.metric("Recall", f"{metrics.get('recall', 0):.4f}")
+                            recall_val = metrics.get('recall', 0)
+                            st.metric("Recall", f"{recall_val:.4f}")
+                            st.caption("Verdaderos positivos / (Verdaderos positivos + Falsos negativos)")
                         
-                        if metrics.get('roc_auc'):
-                            st.metric("ROC-AUC", f"{metrics.get('roc_auc', 0):.4f}")
+                        # ROC-AUC en una fila separada si existe
+                        if metrics.get('roc_auc') is not None:
+                            roc_auc_val = metrics.get('roc_auc', 0)
+                            col_roc1, col_roc2 = st.columns([1, 3])
+                            with col_roc1:
+                                st.metric("ROC-AUC", f"{roc_auc_val:.4f}")
+                                st.caption("Área bajo la curva ROC (0.5 = aleatorio, 1.0 = perfecto)")
                         
                         # Feature importance
                         if predictor.feature_importance is not None and len(predictor.feature_importance) > 0:
@@ -694,10 +708,17 @@ with tab2:
                         historico_comuna.columns = ['comuna', 'incendios_total', 'incendios_promedio', 'incendios_max', 'area_total']
                         pred_df = pred_df.merge(historico_comuna, on='comuna', how='left')
                         
+                        # Agregar columna dummy 'incendio_ocurrencia' que prepare_features espera (no se usará para predicción)
+                        # Usamos 0 como valor dummy ya que es solo para satisfacer el formato esperado
+                        pred_df['incendio_ocurrencia'] = 0
+                        
+                        # Obtener task_type de session_state si existe
+                        task_type_pred = st.session_state.get('task_type', 'classification')
+                        
                         # Preparar features para predicción - pasar target_col aunque no se use
                         X_pred, _ = st.session_state.predictor.prepare_features(pred_df, target_col='incendio_ocurrencia')
                         
-                        if task_type == 'classification':
+                        if task_type_pred == 'classification':
                             riesgos = st.session_state.predictor.predict(X_pred, return_proba=True)
                         else:
                             predicciones = st.session_state.predictor.predict(X_pred)
