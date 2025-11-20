@@ -929,42 +929,82 @@ with tab2:
                         
                         st.success(f"✅ Modelo {model_type.upper()} ({task_type}) entrenado exitosamente con datos reales")
                         
-                        # Mostrar métricas
+                        # Mostrar métricas según el tipo de tarea
                         st.subheader("📊 Métricas del Modelo")
-                        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                         
-                        with col_m1:
-                            accuracy_val = float(metrics.get('accuracy', 0))
-                            st.markdown(f"**Accuracy:**")
-                            st.markdown(f"### {accuracy_val:.3f}")
-                            st.caption("Porcentaje de predicciones correctas")
+                        if task_type == 'classification':
+                            # Métricas de clasificación
+                            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                            
+                            with col_m1:
+                                accuracy_val = float(metrics.get('accuracy', 0))
+                                st.markdown(f"**Accuracy:**")
+                                st.markdown(f"### {accuracy_val:.3f}")
+                                st.caption("Porcentaje de predicciones correctas")
+                            
+                            with col_m2:
+                                f1_val = float(metrics.get('f1', 0))
+                                st.markdown(f"**F1-Score:**")
+                                st.markdown(f"### {f1_val:.3f}")
+                                st.caption("Balance entre precisión y recall")
+                            
+                            with col_m3:
+                                precision_val = float(metrics.get('precision', 0))
+                                st.markdown(f"**Precision:**")
+                                st.markdown(f"### {precision_val:.3f}")
+                                st.caption("Verdaderos positivos / (Verdaderos + Falsos positivos)")
+                            
+                            with col_m4:
+                                recall_val = float(metrics.get('recall', 0))
+                                st.markdown(f"**Recall:**")
+                                st.markdown(f"### {recall_val:.3f}")
+                                st.caption("Verdaderos positivos / (Verdaderos positivos + Falsos negativos)")
+                            
+                            # ROC-AUC en una fila separada si existe
+                            if metrics.get('roc_auc') is not None:
+                                roc_auc_val = float(metrics.get('roc_auc', 0))
+                                col_roc1, col_roc2 = st.columns([1, 3])
+                                with col_roc1:
+                                    st.markdown(f"**ROC-AUC:**")
+                                    st.markdown(f"### {roc_auc_val:.3f}")
+                                    st.caption("Área bajo la curva ROC (0.5 = aleatorio, 1.0 = perfecto)")
                         
-                        with col_m2:
-                            f1_val = float(metrics.get('f1', 0))
-                            st.markdown(f"**F1-Score:**")
-                            st.markdown(f"### {f1_val:.3f}")
-                            st.caption("Balance entre precisión y recall")
-                        
-                        with col_m3:
-                            precision_val = float(metrics.get('precision', 0))
-                            st.markdown(f"**Precision:**")
-                            st.markdown(f"### {precision_val:.3f}")
-                            st.caption("Verdaderos positivos / (Verdaderos + Falsos positivos)")
-                        
-                        with col_m4:
-                            recall_val = float(metrics.get('recall', 0))
-                            st.markdown(f"**Recall:**")
-                            st.markdown(f"### {recall_val:.3f}")
-                            st.caption("Verdaderos positivos / (Verdaderos positivos + Falsos negativos)")
-                        
-                        # ROC-AUC en una fila separada si existe
-                        if metrics.get('roc_auc') is not None:
-                            roc_auc_val = float(metrics.get('roc_auc', 0))
-                            col_roc1, col_roc2 = st.columns([1, 3])
-                            with col_roc1:
-                                st.markdown(f"**ROC-AUC:**")
-                                st.markdown(f"### {roc_auc_val:.3f}")
-                                st.caption("Área bajo la curva ROC (0.5 = aleatorio, 1.0 = perfecto)")
+                        else:  # regression
+                            # Métricas de regresión
+                            col_m1, col_m2, col_m3 = st.columns(3)
+                            
+                            with col_m1:
+                                rmse_val = float(metrics.get('rmse', 0))
+                                st.markdown(f"**RMSE:**")
+                                st.markdown(f"### {rmse_val:.3f}")
+                                st.caption("Raíz del error cuadrático medio (menor es mejor)")
+                            
+                            with col_m2:
+                                mae_val = float(metrics.get('mae', 0))
+                                st.markdown(f"**MAE:**")
+                                st.markdown(f"### {mae_val:.3f}")
+                                st.caption("Error absoluto medio (menor es mejor)")
+                            
+                            with col_m3:
+                                r2_val = float(metrics.get('r2', 0))
+                                st.markdown(f"**R²:**")
+                                st.markdown(f"### {r2_val:.3f}")
+                                st.caption("Coeficiente de determinación (1.0 = perfecto, 0.0 = aleatorio)")
+                            
+                            # Información adicional sobre interpretación
+                            st.info(f"""
+                            **Interpretación de métricas de regresión:**
+                            
+                            - **RMSE ({rmse_val:.3f})**: Error promedio en la misma unidad que el target. 
+                              Indica cuántos incendios se predice incorrectamente en promedio.
+                            
+                            - **MAE ({mae_val:.3f})**: Error absoluto promedio. Más fácil de interpretar que RMSE.
+                            
+                            - **R² ({r2_val:.3f})**: Porcentaje de variabilidad explicada por el modelo.
+                              - R² = 1.0: Predicción perfecta
+                              - R² = 0.0: El modelo no es mejor que predecir la media
+                              - R² < 0.0: El modelo es peor que predecir la media
+                            """)
                         
                         # Feature importance
                         if predictor.feature_importance is not None and len(predictor.feature_importance) > 0:
