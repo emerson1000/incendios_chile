@@ -1164,13 +1164,40 @@ with tab2:
                             'dia_anio': (ultimo_anio + 1) * 365
                         })
                         
+                        # Preparar features históricas igual que en entrenamiento
+                        anos_unicos_pred = sorted(df_filtrado['anio'].unique())
+                        ano_min_pred = min(anos_unicos_pred)
+                        ano_max_pred = max(anos_unicos_pred)
+                        
                         historico_comuna = df_filtrado.groupby('comuna').agg({
-                            'num_incendios': ['sum', 'mean', 'max'],
-                            'area_quemada_ha': 'sum'
+                            'num_incendios': ['sum', 'mean', 'max', 'std'],
+                            'area_quemada_ha': ['sum', 'mean']
                         }).reset_index()
                         
-                        historico_comuna.columns = ['comuna', 'incendios_total', 'incendios_promedio', 'incendios_max', 'area_total']
+                        historico_comuna.columns = ['comuna', 'incendios_total_hist', 'incendios_promedio_hist', 
+                                                    'incendios_max_hist', 'incendios_std_hist', 
+                                                    'area_total_hist', 'area_promedio_hist']
                         pred_df = pred_df.merge(historico_comuna, on='comuna', how='left')
+                        
+                        # Llenar NaN en features históricas
+                        features_historicas = ['incendios_total_hist', 'incendios_promedio_hist', 
+                                              'incendios_max_hist', 'incendios_std_hist', 
+                                              'area_total_hist', 'area_promedio_hist']
+                        for feat in features_historicas:
+                            if feat in pred_df.columns:
+                                pred_df[feat] = pred_df[feat].fillna(0)
+                        
+                        # Agregar features temporales igual que en entrenamiento
+                        pred_df['anio_normalizado'] = (pred_df['anio'] - ano_min_pred) / (ano_max_pred - ano_min_pred + 1e-10)
+                        pred_df['mes_sin'] = np.sin(2 * np.pi * pred_df['mes'] / 12)
+                        pred_df['mes_cos'] = np.cos(2 * np.pi * pred_df['mes'] / 12)
+                        
+                        # Para predicción, no podemos calcular lags históricos reales (necesitaríamos datos del pasado)
+                        # Usar valores históricos promedio como aproximación
+                        pred_df['incendios_anio_anterior'] = pred_df['incendios_promedio_hist']
+                        pred_df['incendios_2_anios_antes'] = pred_df['incendios_promedio_hist'] * 0.8  # Aproximación
+                        pred_df['area_anio_anterior'] = pred_df['area_promedio_hist']
+                        pred_df['incendios_promedio_3_anios'] = pred_df['incendios_promedio_hist']
                         
                         # Agregar columna dummy 'incendio_ocurrencia' que prepare_features espera (no se usará para predicción)
                         # Usamos 0 como valor dummy ya que es solo para satisfacer el formato esperado
@@ -1190,13 +1217,63 @@ with tab2:
                             st.info(f"🔍 Usando modelo **{model_type_usado.upper()}** ({task_type_usado}) para predicción")
                             
                             # Preparar features para predicción - pasar target_col aunque no se use
-                            X_pred, _ = st.session_state.predictor.prepare_features(pred_df, target_col='incendio_ocurrencia')
-                            
-                            # Verificar que las features son correctas
-                            if X_pred is None or len(X_pred) == 0:
-                                st.error("❌ Error: No se pudieron preparar las features para predicción")
-                            else:
-                                st.info(f"📊 Prediciendo riesgo para {len(X_pred)} comunas con {len(X_pred.columns)} features")
+                            try:
+                                X_pred, _ = st.session_state.predictor.prepare_features(pred_df, target_col='incendio_ocurrencia')
+                                
+                                # Verificar que las features son correctas
+                                if X_pred is None or len(X_pred) == 0:
+                                    st.error("❌ Error: No se pudieron preparar las features para predicción")
+                                else:
+                                    # Verificar que el número de features coincide
+                                    expected_features = len(st.session_state.predictor.feature_names) if st.session_state.predictor.feature_names else 0
+                                    actual_features = len(X_pred.columns)
+                                    
+                                    if expected_features > 0 and actual_features != expected_features:
+                                        st.error(f"""
+                                        ❌ **Error de dimensiones de features:**
+                                        
+                                        - Features esperadas (del entrenamiento): {expected_features}
+                                        - Features obtenidas (de predicción): {actual_features}
+                                        - Diferencia: {abs(actual_features - expected_features)}
+                                        
+                                        **Posibles causas:**
+                                        1. Las comunas en predicción son diferentes a las del entrenamiento
+                                        2. Faltan algunas features en los datos de predicción
+                                        3. El modelo fue entrenado con datos diferentes
+                                        
+                                        **Solución:** Vuelve a entrenar el modelo con los mismos filtros que usarás para predecir.
+                                        """)
+                                    else:
+                                        st.info(f"📊 Prediciendo riesgo para {len(X_pred)} comunas con {len(X_pred.columns)} features")
+                                        
+                                        # Mostrar algunas features faltantes si las hay
+                                        missing_features = set(st.session_state.predictor.feature_names) - set(X_pred.columns) if st.session_state.predictor.feature_names else set()
+                                        if missing_features:
+                                            st.warning(f"⚠️ **Advertencia:** Faltan {len(missing_features)} features. Se rellenarán con 0.")
+                                            with st.expander("Ver features faltantes"):
+                                                st.write(list(missing_features)[:20])  # Mostrar las primeras 20
+                            except Exception as e:
+                                error_msg = str(e)
+                                if "number of features" in error_msg.lower() or "shape" in error_msg.lower():
+                                    st.error(f"""
+                                    ❌ **Error de dimensiones de features:**
+                                    
+                                    El modelo espera un número diferente de features al que se está proporcionando.
+                                    
+                                    **Error:** {error_msg}
+                                    
+                                    **Solución:**
+                                    1. Vuelve a entrenar el modelo con los mismos datos y filtros
+                                    2. Asegúrate de usar los mismos filtros de años, regiones y comunas
+                                    3. Si persiste, el problema puede ser que el modelo necesita datos con exactamente las mismas comunas del entrenamiento
+                                    """)
+                                    # Opción de debug
+                                    with st.expander("🔍 Información de Debug"):
+                                        if st.session_state.predictor.feature_names:
+                                            st.write(f"Features esperadas: {len(st.session_state.predictor.feature_names)}")
+                                            st.write(f"Primeras 20 features esperadas: {st.session_state.predictor.feature_names[:20]}")
+                                else:
+                                    raise
                                 
                                 # Mostrar estadísticas de las predicciones
                                 if task_type_pred == 'classification':

@@ -123,54 +123,113 @@ class FireRiskPredictor:
         """
         logger.info("Preparando features...")
         
-        # Lista de features disponibles
-        feature_cols = []
+        # Si ya tenemos feature_names guardados (modo predicción), usarlos
+        # Si no, construir desde cero (modo entrenamiento)
+        is_prediction = self.feature_names is not None and len(self.feature_names) > 0
         
-        # Features climáticas
-        for feat in FEATURES["climatic"]:
-            if feat in df.columns:
-                feature_cols.append(feat)
+        if is_prediction:
+            logger.info(f"Modo predicción: usando {len(self.feature_names)} features predefinidas")
+            # En modo predicción, debemos asegurar que las features coincidan exactamente
+            
+            # Crear dummies de comunas SI hay comunas en el entrenamiento
+            comuna_features_training = [f for f in self.feature_names if f.startswith('comuna_')]
+            
+            if 'comuna' in df.columns and len(comuna_features_training) > 0:
+                comunas_training = [f.replace('comuna_', '') for f in comuna_features_training]
+                
+                # Crear dummies para las comunas actuales en df
+                comuna_dummies = pd.get_dummies(df['comuna'], prefix='comuna', sparse=True)
+                
+                # Asegurar que todas las comunas del entrenamiento estén presentes (poner 0 si no están)
+                for col_name in comuna_features_training:
+                    if col_name not in comuna_dummies.columns:
+                        comuna_dummies[col_name] = 0
+                
+                # Eliminar comunas nuevas que no estaban en entrenamiento
+                comuna_dummies = comuna_dummies[comuna_features_training]
+                
+                # Concatenar con df
+                df = pd.concat([df, comuna_dummies], axis=1)
+            
+            # Asegurar que todas las features del entrenamiento estén presentes
+            # Construir X usando exactamente las features del entrenamiento
+            X = pd.DataFrame(index=df.index)
+            
+            for feat_name in self.feature_names:
+                if feat_name in df.columns:
+                    X[feat_name] = df[feat_name].values
+                else:
+                    # Si falta una feature, rellenar con 0
+                    logger.warning(f"Feature '{feat_name}' no encontrada en datos de predicción, rellenando con 0")
+                    X[feat_name] = 0
+            
+            # Asegurar el orden correcto (importante para algunos modelos)
+            X = X[self.feature_names]
+            
+            # Llenar NaN con 0 (por seguridad)
+            X = X.fillna(0)
+            
+            # Preparar y (puede ser dummy para predicción)
+            y = df[target_col].copy() if target_col in df.columns else pd.Series([0] * len(df), index=df.index)
+            
+            # No eliminar filas en predicción (queremos predecir todas)
+            # Solo asegurar que no haya NaN
+            y = y.fillna(0)
+            
+        else:
+            # Modo entrenamiento: construir features desde cero
+            feature_cols = []
+            
+            # Features climáticas
+            for feat in FEATURES["climatic"]:
+                if feat in df.columns:
+                    feature_cols.append(feat)
+            
+            # Features temporales
+            temporal_features = [
+                'mes', 'dia_semana', 'dia_anio', 'anio',
+                'temporada_alta', 'fin_semana', 'mes_sin', 'mes_cos',
+                'anio_normalizado'  # Agregar también esta si existe
+            ]
+            for feat in temporal_features:
+                if feat in df.columns:
+                    feature_cols.append(feat)
+            
+            # Features históricas (incluir todas las que agregamos en el dashboard)
+            historical_features = [
+                'incendios_7d', 'incendios_30d', 'area_quemada_365d', 
+                'riesgo_base_comuna', 'incendios_total_hist', 'incendios_promedio_hist',
+                'incendios_max_hist', 'incendios_std_hist', 'area_total_hist',
+                'area_promedio_hist', 'incendios_anio_anterior', 'incendios_2_anios_antes',
+                'area_anio_anterior', 'incendios_promedio_3_anios'
+            ]
+            for feat in historical_features:
+                if feat in df.columns:
+                    feature_cols.append(feat)
+            
+            # Eliminar columnas no numéricas y con muchos nulos
+            numeric_cols = df[feature_cols].select_dtypes(include=[np.number]).columns.tolist()
+            feature_cols = [col for col in numeric_cols if df[col].notna().sum() > len(df) * 0.8]
+            
+            # Si hay comuna como categorical, crear dummies
+            if 'comuna' in df.columns:
+                comuna_dummies = pd.get_dummies(df['comuna'], prefix='comuna', sparse=True)
+                feature_cols.extend(comuna_dummies.columns.tolist())
+                df = pd.concat([df, comuna_dummies], axis=1)
+            
+            # Preparar X e y
+            X = df[feature_cols].copy()
+            y = df[target_col].copy()
+            
+            # Eliminar filas con valores faltantes
+            mask = ~(X.isna().any(axis=1) | y.isna())
+            X = X[mask]
+            y = y[mask]
+            
+            # Guardar feature_names para predicciones futuras
+            self.feature_names = X.columns.tolist()
         
-        # Features temporales
-        temporal_features = [
-            'mes', 'dia_semana', 'dia_anio', 'anio',
-            'temporada_alta', 'fin_semana', 'mes_sin', 'mes_cos'
-        ]
-        for feat in temporal_features:
-            if feat in df.columns:
-                feature_cols.append(feat)
-        
-        # Features históricas
-        historical_features = [
-            'incendios_7d', 'incendios_30d', 'area_quemada_365d', 
-            'riesgo_base_comuna'
-        ]
-        for feat in historical_features:
-            if feat in df.columns:
-                feature_cols.append(feat)
-        
-        # Eliminar columnas no numéricas y con muchos nulos
-        numeric_cols = df[feature_cols].select_dtypes(include=[np.number]).columns.tolist()
-        feature_cols = [col for col in numeric_cols if df[col].notna().sum() > len(df) * 0.8]
-        
-        # Si hay comuna como categorical, crear dummies
-        if 'comuna' in df.columns:
-            comuna_dummies = pd.get_dummies(df['comuna'], prefix='comuna', sparse=True)
-            feature_cols.extend(comuna_dummies.columns.tolist())
-            df = pd.concat([df, comuna_dummies], axis=1)
-        
-        # Preparar X e y
-        X = df[feature_cols].copy()
-        y = df[target_col].copy()
-        
-        # Eliminar filas con valores faltantes
-        mask = ~(X.isna().any(axis=1) | y.isna())
-        X = X[mask]
-        y = y[mask]
-        
-        self.feature_names = X.columns.tolist()
-        
-        logger.info(f"Features preparadas: {len(self.feature_names)} features, {len(X)} muestras")
+        logger.info(f"Features preparadas: {len(X.columns)} features, {len(X)} muestras")
         
         return X, y
     
