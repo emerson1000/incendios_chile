@@ -121,6 +121,103 @@ class ResourceAllocationOptimizer:
         
         return df
     
+    def _check_solver_availability(self, solver_name: str) -> bool:
+        """
+        Verifica si un solver está disponible
+        
+        Args:
+            solver_name: Nombre del solver a verificar
+            
+        Returns:
+            True si el solver está disponible, False en caso contrario
+        """
+        try:
+            solver = pulp.getSolver(solver_name, msg=0)
+            # Intentar crear un problema simple para verificar
+            test_prob = pulp.LpProblem("test", pulp.LpMinimize)
+            x = pulp.LpVariable("x", lowBound=0)
+            test_prob += x
+            test_prob.solve(solver)
+            return True
+        except Exception as e:
+            logger.debug(f"Solver {solver_name} no disponible: {e}")
+            return False
+    
+    def _solve_with_fallback(self, prob: pulp.LpProblem, preferred_solver: str) -> Dict:
+        """
+        Intenta resolver el problema con el solver preferido, 
+        y usa alternativas si falla
+        
+        Args:
+            prob: Problema de optimización PuLP
+            preferred_solver: Solver preferido
+            
+        Returns:
+            Dict con 'status' y 'solver_used'
+        """
+        # Lista de solvers a probar en orden de preferencia
+        solver_options = [
+            preferred_solver,
+            "HiGHS_CMD",  # HiGHS suele ser más confiable que CBC
+            "PULP_CBC_CMD",
+            "COIN_CMD",
+            "PULP_CBC",
+            None  # Default solver (PuLP intenta automáticamente) - se maneja en el loop
+        ]
+        
+        # Si preferred_solver es None, usar el default de PuLP
+        if preferred_solver is None:
+            solver_options = ["HiGHS_CMD", "PULP_CBC_CMD", "COIN_CMD", "PULP_CBC", None]
+        
+        # Eliminar duplicados manteniendo el orden
+        seen = set()
+        unique_solvers = []
+        for s in solver_options:
+            if s not in seen:
+                seen.add(s)
+                unique_solvers.append(s)
+        
+        last_error = None
+        
+        for solver_name in unique_solvers:
+            try:
+                if solver_name is None:
+                    logger.info("Intentando resolver con solver por defecto de PuLP...")
+                    status = prob.solve()
+                    solver_used = "default"
+                else:
+                    logger.info(f"Intentando resolver con solver: {solver_name}...")
+                    solver = pulp.getSolver(solver_name, msg=1)
+                    status = prob.solve(solver)
+                    solver_used = solver_name
+                
+                logger.info(f"Solver {solver_used} retornó status: {pulp.LpStatus[status]}")
+                
+                return {
+                    'status': status,
+                    'solver_used': solver_used
+                }
+                
+            except pulp.apis.core.PulpSolverError as e:
+                last_error = e
+                logger.warning(f"Error con solver {solver_name}: {e}")
+                continue
+            except Exception as e:
+                last_error = e
+                logger.warning(f"Error inesperado con solver {solver_name}: {e}")
+                continue
+        
+        # Si todo falla, lanzar error informativo
+        solver_names_tried = [s for s in unique_solvers if s is not None]
+        error_msg = (
+            f"No se pudo resolver el problema de optimización. "
+            f"Se intentaron los siguientes solvers: {', '.join(solver_names_tried) if solver_names_tried else 'ninguno'}. "
+            f"Último error: {last_error}. "
+            f"Verifica que tengas instalado al menos uno de: CBC, COIN-OR, o HiGHS. "
+            f"Instalación sugerida: pip install pulp[coin] o pip install pulp[highs]"
+        )
+        raise RuntimeError(error_msg)
+    
     def _calculate_travel_times(self, comuna_coords: pd.DataFrame,
                                base_coords: pd.DataFrame) -> pd.DataFrame:
         """
@@ -288,15 +385,20 @@ class ResourceAllocationOptimizer:
         for b in bases:
             prob += n[b] >= y[b]
         
-        # Resolver
-        solver = pulp.getSolver(self.solver_name, msg=0)
-        prob.solve(solver)
+        # Resolver con manejo de errores y fallback
+        solver_result = self._solve_with_fallback(prob, self.solver_name)
+        if solver_result['status'] != pulp.LpStatusOptimal:
+            logger.warning(f"El solver retornó status: {solver_result['status']}")
+            if solver_result['status'] == pulp.LpStatusInfeasible:
+                raise ValueError("El problema es infactible. Verifica las restricciones.")
+            elif solver_result['status'] == pulp.LpStatusUnbounded:
+                raise ValueError("El problema es ilimitado. Verifica la función objetivo.")
         
         # Extraer solución
         bases_activas = [b for b in bases if y[b].varValue == 1]
-        brigadas_por_base = {b: int(n[b].varValue) for b in bases if n[b].varValue > 0}
+        brigadas_por_base = {b: int(n[b].varValue) for b in bases if n[b].varValue is not None and n[b].varValue > 0}
         cobertura = {(b, i): x[(b, i)].varValue for b in bases for i in comunas 
-                    if x[(b, i)].varValue == 1}
+                    if x[(b, i)].varValue is not None and x[(b, i)].varValue == 1}
         
         # Calcular estadísticas
         total_brigades = sum(brigadas_por_base.values())
@@ -319,6 +421,9 @@ class ResourceAllocationOptimizer:
             weights=[t['riesgo'] for t in tiempos_respuesta]
         )
         
+        # Obtener el status del problema después de resolver
+        problem_status = prob.status
+        
         solution = {
             'bases_activas': bases_activas,
             'brigadas_por_base': brigadas_por_base,
@@ -327,8 +432,8 @@ class ResourceAllocationOptimizer:
             'total_bases_activas': len(bases_activas),
             'tiempo_respuesta_promedio': tiempo_promedio,
             'tiempo_respuesta_ponderado': tiempo_promedio_ponderado,
-            'status': pulp.LpStatus[prob.status],
-            'objective_value': pulp.value(prob.objective)
+            'status': pulp.LpStatus[problem_status],
+            'objective_value': pulp.value(prob.objective) if problem_status == pulp.LpStatusOptimal else None
         }
         
         return solution
